@@ -7,7 +7,7 @@ async function main() {
     throw new Error('DATABASE_URL is not set. Copy .env.example to .env and fill it in.');
   }
 
-  // Fail fast if the database is unreachable: open one connection and release it.
+  // Fail fast if the database is unreachable.
   const client = await pool.connect();
   client.release();
   console.log('Database connected successfully');
@@ -16,7 +16,6 @@ async function main() {
     console.log(`API listening on http://localhost:${config.port}`);
   });
 
-  // Hosting platforms send SIGTERM before stopping the process.
   const shutdown = () => {
     server.close(() => {
       pool.end().finally(() => process.exit(0));

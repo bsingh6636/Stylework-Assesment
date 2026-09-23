@@ -51,8 +51,7 @@ interface StatusSelectProps {
   onChange: (lead: Lead, status: LeadStatus) => Promise<void>
 }
 
-// The select always shows the saved status: it changes only once the API
-// confirms the update, and is disabled while the request is in flight.
+// Not optimistic: the select shows the saved status until the API confirms a change.
 function StatusSelect({ lead, onChange }: StatusSelectProps) {
   const [isSaving, setIsSaving] = useState(false)
 

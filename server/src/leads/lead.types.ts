@@ -3,8 +3,6 @@ export const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'converted', 'los
 
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
 
-// A lead as the API returns it (camelCase). The repository maps database rows
-// (e.g. the created_at column) to this shape.
 export interface Lead {
   id: number;
   name: string;
@@ -14,7 +12,6 @@ export interface Lead {
   createdAt: Date;
 }
 
-// New leads always start with the database default status ('new').
 export interface CreateLeadInput {
   name: string;
   email: string;

@@ -59,7 +59,6 @@ function App() {
     content = <LeadTable leads={leads} onStatusChange={handleStatusChange} />
   }
 
-  // The count is only shown once it's accurate (not while loading or on error).
   let summary = null
   if (isLoading && leads.length > 0) {
     summary = (

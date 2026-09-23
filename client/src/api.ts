@@ -2,7 +2,6 @@ import type { Lead, LeadStatus, NewLead } from './types.ts'
 
 const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000').replace(/\/+$/, '')
 
-// Thrown for failed requests. `details` holds per-field validation messages.
 export class ApiError extends Error {
   readonly status: number
   readonly details?: Record<string, string>
@@ -15,7 +14,6 @@ export class ApiError extends Error {
   }
 }
 
-// Shape of the API's error responses.
 interface ErrorBody {
   error?: string
   details?: Record<string, string>
@@ -33,8 +31,7 @@ async function request<T>(path: string, { method = 'GET', body, signal }: Reques
     res = await fetch(`${API_URL}${path}`, {
       method,
       signal,
-      // Only send a JSON content type when there is a body, so GET requests
-      // stay "simple" and skip the CORS preflight.
+      // A JSON content type on GET requests would trigger a CORS preflight.
       headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     })

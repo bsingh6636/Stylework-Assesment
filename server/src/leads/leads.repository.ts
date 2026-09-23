@@ -2,10 +2,6 @@ import { DatabaseError } from 'pg';
 import { pool } from '../db.js';
 import type { CreateLeadInput, Lead, LeadStatus } from './lead.types.js';
 
-// All lead SQL lives in this file. Every value is passed as a parameter
-// ($1, $2, ...); user input is never concatenated into a query string.
-
-// A row as PostgreSQL returns it (snake_case columns).
 interface LeadRow {
   id: number;
   name: string;
@@ -15,7 +11,6 @@ interface LeadRow {
   created_at: Date;
 }
 
-// Thrown by createLead when the email is already used (case-insensitive).
 export class DuplicateEmailError extends Error {
   constructor(email: string) {
     super(`A lead with email ${email} already exists`);
@@ -39,8 +34,6 @@ function escapeLikePattern(value: string): string {
   return value.replace(/[\\%_]/g, (char) => `\\${char}`);
 }
 
-// Returns all leads, newest first. With a search term, only leads whose name,
-// email or phone contains it (case-insensitive).
 export async function listLeads(search?: string): Promise<Lead[]> {
   const term = search?.trim();
   const pattern = term ? `%${escapeLikePattern(term)}%` : null;
@@ -75,7 +68,6 @@ export async function createLead(input: CreateLeadInput): Promise<Lead> {
   }
 }
 
-// Returns the updated lead, or null if no lead has this id.
 export async function updateLeadStatus(id: number, status: LeadStatus): Promise<Lead | null> {
   const { rows } = await pool.query<LeadRow>(
     `UPDATE leads

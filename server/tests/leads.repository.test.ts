@@ -9,17 +9,13 @@ import {
   updateLeadStatus,
 } from '../src/leads/leads.repository.js';
 
-// Runs the real SQL against PostgreSQL. Skipped unless TEST_DATABASE_URL is set.
-//
-// Everything happens in a temporary schema that is dropped afterwards, so
-// TEST_DATABASE_URL may point at the same database as DATABASE_URL without
-// touching its data.
+// Runs in a temporary schema that is dropped afterwards, so TEST_DATABASE_URL
+// can safely point at the development database.
 const schema = escapeIdentifier(`test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)('leads repository (PostgreSQL)', () => {
   beforeAll(async () => {
-    // Every pooled connection uses the temporary schema. Queries on a client
-    // run in order, so this SET always runs before the test's own query.
+    // Queries on a client run in order, so this SET always precedes the test's query.
     pool.on('connect', (client) => {
       void client.query(`SET search_path TO ${schema}`);
     });
@@ -35,7 +31,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)('leads repository (PostgreSQL)',
   });
 
   beforeEach(async () => {
-    // Schema-qualified on purpose: this can only ever empty the temporary table.
+    // Schema-qualified so this can never empty the real table.
     await pool.query(`TRUNCATE ${schema}.leads RESTART IDENTITY`);
   });
 

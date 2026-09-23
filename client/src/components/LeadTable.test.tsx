@@ -14,7 +14,6 @@ describe('LeadTable', () => {
     const first = within(rows[0]!)
     expect(first.getByText('Asha Rao')).toBeInTheDocument()
     expect(first.getByRole('link', { name: asha.email })).toHaveAttribute('href', 'mailto:asha@example.com')
-    // Spaces are stripped from the tel: link but kept in the visible number.
     expect(first.getByRole('link', { name: asha.phone })).toHaveAttribute('href', 'tel:+919876543210')
     expect(first.getByRole('combobox', { name: 'Status for Asha Rao' })).toHaveValue('new')
     expect(first.getByText((_, element) => element?.tagName === 'TIME')).toHaveAttribute(
@@ -45,7 +44,7 @@ describe('LeadTable', () => {
 
     finish()
     await vi.waitFor(() => expect(select).toBeEnabled())
-    // The parent never passed an updated lead, so the saved status is still shown.
+    // The parent never passed an updated lead, so the saved status remains.
     expect(select).toHaveValue('new')
   })
 })

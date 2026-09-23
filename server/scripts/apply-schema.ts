@@ -1,4 +1,3 @@
-// Applies db/schema.sql to the database in DATABASE_URL: `npm run db:schema`.
 import { readFile } from 'node:fs/promises';
 import { config } from '../src/config.js';
 import { pool } from '../src/db.js';

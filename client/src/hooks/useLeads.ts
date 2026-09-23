@@ -9,14 +9,12 @@ interface LeadsResult {
   error: string | null
 }
 
-// Loads the leads matching `search`. When the search changes, the previous
-// request is cancelled, so a slow response can never overwrite a newer one.
 export function useLeads(search: string) {
   const [result, setResult] = useState<LeadsResult | null>(null)
-  // Bumped by reload() to fetch the same search again.
   const [version, setVersion] = useState(0)
 
   useEffect(() => {
+    // Aborted when the search changes, so a slow response can't overwrite a newer one.
     const controller = new AbortController()
 
     listLeads(search, controller.signal)
@@ -35,11 +33,8 @@ export function useLeads(search: string) {
   return {
     leads: result?.leads ?? [],
     error: result?.error ?? null,
-    // True until the response for the current search arrives. The previous
-    // results stay visible in the meantime.
     isLoading: result?.search !== search || result.version !== version,
     reload: () => setVersion((v) => v + 1),
-    // Swaps in an updated lead without refetching the list.
     replaceLead: (lead: Lead) =>
       setResult((current) =>
         current && { ...current, leads: current.leads.map((l) => (l.id === lead.id ? lead : l)) },

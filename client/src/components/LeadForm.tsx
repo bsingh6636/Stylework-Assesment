@@ -13,8 +13,8 @@ interface LeadFormProps {
   onCreated: (lead: Lead) => void
 }
 
-// Validation happens on the server (one source of truth); its per-field
-// messages are shown under the matching inputs.
+// Validation lives in the API (single source of truth); its per-field messages
+// are shown under the matching inputs.
 function LeadForm({ onCreated }: LeadFormProps) {
   const [values, setValues] = useState<NewLead>(EMPTY_LEAD)
   const [errors, setErrors] = useState<FieldErrors>({})

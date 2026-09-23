@@ -4,7 +4,6 @@ import { parseCreateLeadInput, parseLeadId, parseSearch } from '../src/leads/lea
 
 const valid = { name: 'Asha Rao', email: 'asha@example.com', phone: '+91 98765 43210' };
 
-// Returns the per-field errors from a failed parseCreateLeadInput call.
 function fieldErrors(body: unknown): Record<string, string> | undefined {
   try {
     parseCreateLeadInput(body);

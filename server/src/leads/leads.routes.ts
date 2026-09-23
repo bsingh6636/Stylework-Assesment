@@ -5,13 +5,11 @@ import { parseCreateLeadInput, parseLeadId, parseLeadStatus, parseSearch } from 
 
 export const leadsRouter = Router();
 
-// GET /api/leads?search=term  List leads (newest first), optionally filtered by a search term.
 leadsRouter.get('/', async (req, res) => {
   const leads = await listLeads(parseSearch(req.query.search));
   res.json(leads);
 });
 
-// POST /api/leads  Body: { "name", "email", "phone" }. Create a lead.
 leadsRouter.post('/', async (req, res) => {
   const input = parseCreateLeadInput(req.body);
   try {
@@ -25,7 +23,6 @@ leadsRouter.post('/', async (req, res) => {
   }
 });
 
-// PATCH /api/leads/:id  Body: { "status" }. Update a lead's status.
 leadsRouter.patch('/:id', async (req, res) => {
   const id = parseLeadId(req.params.id);
   const status = parseLeadStatus(req.body);

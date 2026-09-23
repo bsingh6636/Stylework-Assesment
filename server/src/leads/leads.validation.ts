@@ -1,16 +1,12 @@
 import { HttpError } from '../errors.js';
 import { LEAD_STATUSES, type CreateLeadInput, type LeadStatus } from './lead.types.js';
 
-// Request validation for the leads routes. Each function returns clean,
-// typed input or throws a 400 HttpError.
-
 const MAX_NAME_LENGTH = 100;
 const MAX_EMAIL_LENGTH = 254;
 const MAX_SEARCH_LENGTH = 100;
 const MAX_POSTGRES_INTEGER = 2_147_483_647;
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-// Digits with common separators, e.g. "+91 98765-43210" or "(022) 555 0000".
 const PHONE_PATTERN = /^\+?[\d\s\-().]+$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -73,7 +69,6 @@ export function parseLeadStatus(body: unknown): LeadStatus {
   return body.status;
 }
 
-// Ids are PostgreSQL INTEGERs; anything else can't match a lead.
 export function parseLeadId(value: string): number {
   const id = /^\d+$/.test(value) ? Number(value) : NaN;
   if (!Number.isInteger(id) || id < 1 || id > MAX_POSTGRES_INTEGER) {
@@ -82,7 +77,6 @@ export function parseLeadId(value: string): number {
   return id;
 }
 
-// Returns undefined when there is nothing to search for.
 export function parseSearch(value: unknown): string | undefined {
   if (value === undefined) {
     return undefined;

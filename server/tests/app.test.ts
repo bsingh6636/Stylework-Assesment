@@ -2,7 +2,6 @@ import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
 
-// Smoke tests for the app scaffolding. These don't need a database.
 describe('app', () => {
   const app = createApp();
 

@@ -9,8 +9,6 @@ import {
   updateLeadStatus,
 } from '../src/leads/leads.repository.js';
 
-// HTTP-level tests for the leads routes. The repository is mocked, so these
-// cover routing, validation and error mapping without a database.
 vi.mock('../src/leads/leads.repository.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/leads/leads.repository.js')>();
   return { ...actual, listLeads: vi.fn(), createLead: vi.fn(), updateLeadStatus: vi.fn() };

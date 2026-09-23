@@ -4,7 +4,6 @@ import { config } from './config.js';
 import { errorHandler, notFoundHandler } from './errors.js';
 import { leadsRouter } from './leads/leads.routes.js';
 
-// Builds the Express app without starting a server, so tests can use it directly.
 export function createApp() {
   const app = express();
 

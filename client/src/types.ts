@@ -11,7 +11,6 @@ export const STATUS_LABELS: Record<LeadStatus, string> = {
   lost: 'Lost',
 }
 
-// A lead as the API returns it (dates arrive as ISO 8601 strings).
 export interface Lead {
   id: number
   name: string
@@ -21,7 +20,6 @@ export interface Lead {
   createdAt: string
 }
 
-// What the create form sends. New leads always start with status "new".
 export interface NewLead {
   name: string
   email: string

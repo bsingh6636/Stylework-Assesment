@@ -6,7 +6,6 @@ import App from './App.tsx'
 import { ApiError, listLeads, updateLeadStatus } from './api.ts'
 import { asha, ravi } from './test/fixtures.ts'
 
-// The whole page with the API mocked: loading, search, errors, status updates.
 vi.mock('./api.ts', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api.ts')>()
   return { ...actual, listLeads: vi.fn(), createLead: vi.fn(), updateLeadStatus: vi.fn() }
@@ -44,7 +43,7 @@ describe('App', () => {
     await user.type(screen.getByLabelText('Search leads'), '  asha ')
 
     await waitFor(() => expect(leadNames()).toEqual(['Asha Rao']))
-    // One request on load and one for the whole typed term, not one per keystroke.
+    // One request on load, then one for the whole term rather than one per keystroke.
     expect(listLeads).toHaveBeenCalledTimes(2)
     expect(listLeads).toHaveBeenLastCalledWith('asha', expect.any(AbortSignal))
   })
@@ -94,7 +93,7 @@ describe('App', () => {
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Asha Rao is now Contacted'))
     expect(updateLeadStatus).toHaveBeenCalledWith(1, 'contacted')
     expect(screen.getByLabelText('Status for Asha Rao')).toHaveValue('contacted')
-    // Updated locally, without reloading the list.
+    // Updated in place rather than refetched.
     expect(listLeads).toHaveBeenCalledTimes(1)
   })
 
