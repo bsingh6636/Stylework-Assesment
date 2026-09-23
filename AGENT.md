@@ -1,7 +1,7 @@
 # AI usage (AGENT.md)
 
-AI tools were allowed for this assignment and were used heavily. This file records which tools
-were used, how, what they produced, and where their output had to be corrected.
+AI tools were allowed for this assignment and were used. This file records which tools were
+used, how, what they produced, and where their output had to be corrected.
 
 ## Tools
 
@@ -19,10 +19,10 @@ were used, how, what they produced, and where their output had to be corrected.
    schema → repository → routes and validation → API tests → list and search → form and status
    updates → client tests → comment cleanup → security hardening → status filter, `updated_at`
    and pagination → review fixes → documentation → site header, demo-data seed script and
-   deleting leads.
+   deleting leads → Docker and nginx deployment.
 2. For each step the agent wrote the code and its tests, and ran typecheck, lint and tests.
-3. I (the developer) read the diff, ran the app locally, asked for changes where needed, then
-   wrote the commit message and committed. The agent never committed or pushed.
+3. I (the developer) read the diff, ran the app locally and asked for changes where needed
+   before each commit.
 
 ## Prompts
 
@@ -42,6 +42,8 @@ Quoted prompts are as typed, with spelling fixed; the rest are paraphrased.
 | 10 | Add a header with the company name on the left and "View my portfolio" and my GitHub profile on the right, plus the Stylework favicon. *(paraphrased)* | `SiteHeader` component; the favicon was taken from stylework.city |
 | 11 | "Also give option to delete lead, also create script to create random 100 data." | `DELETE /api/leads/:id` behind a confirmation dialog; `npm run db:seed` |
 | 12 | "Review all changes, push changes in 2 commits." Then: "Also add proper loader states for table, search, add, delete and all", and "better loading and skeleton wherever we can use". | Review of both sessions' changes; skeleton table, progress bar, busy search, read-only form while saving, status and delete spinners |
+| 13 | Review everything, including the live site | Review of the code, docs, git history and the live deployment's headers, rate limiting and open ports |
+| 14 | "Update live URLs, hosted on AWS, Docker, nginx." | Live URLs in the README; `Dockerfile`, `docker-compose.yml` and `deploy/nginx.conf` with a CSP tested against the live app |
 
 ## What was AI-generated and what was done by hand
 
@@ -53,8 +55,7 @@ Quoted prompts are as typed, with spelling fixed; the rest are paraphrased.
 | README.md and AGENT.md | Drafted from the code and session history | Reviewed and corrected |
 | Scope and step plan, feature choices | Options proposed | Decided |
 | Supabase project, credentials, `.env` values, env var naming (`STYLE_WORK_DB_URL`) | | Yes |
-| Commit history: splitting, messages, pushing | | Yes |
-| Deployment | Steps documented | Yes |
+| Deployment | `Dockerfile`, `docker-compose.yml`, `deploy/nginx.conf` and the deployment docs | AWS instance, Docker and nginx setup, domain and HTTPS certificate |
 
 ## Key engineering decisions
 
@@ -62,7 +63,7 @@ Quoted prompts are as typed, with spelling fixed; the rest are paraphrased.
   untrusted input into typed values; the repository owns all SQL. Each layer is tested on its
   own: validation as pure functions, routes with a mocked repository, and SQL against a real
   database.
-- **Plain parameterized SQL through `pg`.** Four queries don't need an ORM, and every query stays
+- **Plain parameterized SQL through `pg`.** Five queries on one table don't need an ORM, and every query stays
   readable. The id is `INTEGER` rather than `BIGINT`, because `pg` returns `BIGINT` as a string.
 - **Rules enforced in the database too.** A case-insensitive unique index on `lower(email)`
   (mapped to a `409`), a CHECK on `status`, non-blank CHECKs, and a `BEFORE UPDATE` trigger for
@@ -134,3 +135,6 @@ Quoted prompts are as typed, with spelling fixed; the rest are paraphrased.
 - Headless-browser screenshots at desktop, tablet and phone widths, in light and dark mode,
   against a throwaway database schema seeded with test data.
 - Reading every diff before committing it.
+- Checking the live site: a spoofed `X-Forwarded-For` doesn't change the rate-limit key, the API
+  port is closed to the internet, no source maps or secrets are served, and the frontend runs
+  under its CSP without violations in headless Chrome.

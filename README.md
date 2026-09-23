@@ -4,7 +4,8 @@ A full-stack app for tracking sales leads: add a lead, find it again by name, em
 filter by status, and move it through the pipeline (`new` → `contacted` → `qualified` →
 `converted` / `lost`).
 
-**Live app:** _add the frontend URL here after deploying_ · **API health:** _add `<api-url>/api/health`_
+**Live app:** <https://style-work.brijeshhq.com> · **API health:** <https://style-work.brijeshhq.com/api/health>
+· Hosted on AWS with Docker and nginx ([Deployment](#deployment))
 
 | Part     | Stack                                                          | Folder    |
 | -------- | -------------------------------------------------------------- | --------- |
@@ -83,6 +84,9 @@ server/
   src/app.ts           middleware stack
   src/leads/           routes -> validation -> repository
   tests/               API, validation, security and PostgreSQL tests
+  Dockerfile           production image for the API
+deploy/nginx.conf      live nginx site: HTTPS, static frontend, /api proxy, headers
+docker-compose.yml     runs the API container on the server
 ```
 
 ## Getting started
@@ -245,8 +249,13 @@ containing a 9. `%` and `_` in a search are matched literally.
   applied globally. The health check is exempt so platform probes are never throttled.
   `X-Forwarded-For` is only trusted when `TRUST_PROXY` is set, so clients can't spoof their IP
   to reset their quota.
-- **HTTP hardening:** security headers via `helmet` (HSTS, `nosniff`, CSP, frame protection);
-  CORS limited to the configured origins and the `GET`/`POST`/`PATCH`/`DELETE` methods.
+- **HTTP hardening:** the API sends security headers via `helmet` (HSTS, `nosniff`, CSP, frame
+  protection). nginx sends the frontend's own strict CSP (scripts only from the same origin, no
+  framing) and the same headers, and adds none to `/api`, so none are sent twice
+  ([`deploy/nginx.conf`](deploy/nginx.conf)). CORS is limited to the configured origins and the
+  `GET`/`POST`/`PATCH`/`DELETE` methods.
+- **Deployment:** the API container publishes its port on `127.0.0.1` only, so it's reachable
+  only through nginx, and runs as a non-root user with production dependencies only.
 - **Error handling:** unexpected errors are logged server-side and return a generic `500`, never
   stack traces or database details.
 - **Database:** secrets live only in environment variables; row level security blocks
@@ -307,32 +316,66 @@ server is needed.
 
 ## Deployment
 
-The app deploys as three pieces: the database (Supabase), the API (a Node web service, e.g.
-Render) and the frontend (any static host, e.g. Render Static Sites, Vercel or Netlify).
+The live app (<https://style-work.brijeshhq.com>) runs on an AWS instance: the API in a Docker
+container, with nginx in front, and the database on Supabase.
 
-1. **Database (Supabase).** Create a project, then run `server/db/schema.sql` in the SQL Editor
-   (or `npm run db:schema` locally against it). Copy the **Session pooler** connection string:
-   the direct connection is IPv6-only, which many hosts can't reach. Append
-   `?sslmode=no-verify` (see [Trade-offs](#trade-offs)).
-2. **API (Render Web Service).**
-   - Root directory: `server`
-   - Build command: `npm ci --include=dev && npm run build` (TypeScript is a dev dependency)
-   - Start command: `npm start`
-   - Health check path: `/api/health`
-   - Environment: `STYLE_WORK_DB_URL` (the pooler URL), `CORS_ORIGIN` (the frontend URL, no
-     trailing slash), `TRUST_PROXY=1`, `NODE_ENV=production`
-3. **Frontend (static site).**
-   - Root directory: `client`
-   - Build command: `npm ci && npm run build`, publish directory: `dist`
-   - Environment: `VITE_STYLE_WORK_API_URL` = the API's public URL. It is baked into the bundle
-     at build time, so rebuild after changing it.
-4. **Smoke test:** open `<api-url>/api/health`, then add, search, update and delete a lead in the live
-   app. If the browser reports a CORS error, check that `CORS_ORIGIN` matches the frontend
-   origin exactly.
+```mermaid
+flowchart LR
+  B[Browser] -->|HTTPS| N["nginx (AWS)"]
+  N -->|"/ and /assets/"| S["client/dist<br/>static files"]
+  N -->|"/api/*"| A["API container<br/>127.0.0.1:3000"]
+  A -->|"pg over TLS"| DB[("PostgreSQL<br/>Supabase")]
+```
 
-Alternatively, serve the frontend and API from one origin behind a reverse proxy that forwards
-`/api` to the server; production builds without `VITE_STYLE_WORK_API_URL` call `/api` on their
-own origin.
+- **One origin.** nginx serves the built frontend and proxies `/api` to the API, so the browser
+  never makes a cross-origin request (no CORS preflights). The frontend is built without
+  `VITE_STYLE_WORK_API_URL`, so it calls `/api` on its own origin.
+- **HTTPS** is terminated by nginx, with a Let's Encrypt certificate; plain HTTP redirects to HTTPS.
+- **API image** ([`server/Dockerfile`](server/Dockerfile)): a multi-stage build compiles the
+  TypeScript, and the runtime image holds only production dependencies, runs as the non-root
+  `node` user and has a health check on `/api/health`.
+- **Container** ([`docker-compose.yml`](docker-compose.yml)): `NODE_ENV=production`,
+  `TRUST_PROXY=1` (nginx is the one proxy, so rate limits see the real client IP), restarts
+  automatically, and binds port 3000 to `127.0.0.1` so the API can't be reached around nginx.
+- **nginx** ([`deploy/nginx.conf`](deploy/nginx.conf)): the frontend gets a strict CSP and
+  security headers; `index.html` is never cached, while hashed files in `/assets/` are cached for
+  a year; unknown paths fall back to `index.html` so shared links work.
+
+### Steps
+
+1. **Database (Supabase).** Create a project and apply the schema with `npm run db:schema` from
+   `server/` (or paste `server/db/schema.sql` into the SQL Editor). Use the **Session pooler**
+   connection string, since the direct connection is IPv6-only, and append `?sslmode=no-verify`
+   (see [Trade-offs](#trade-offs)).
+2. **Server.** On an AWS instance with Docker, nginx and certbot installed, allow only ports 22,
+   80 and 443 in the security group, then clone this repository.
+3. **API.** Create `server/.env` with `STYLE_WORK_DB_URL` (the pooler URL) and
+   `CORS_ORIGIN=https://style-work.brijeshhq.com`, then start the container:
+
+   ```bash
+   docker compose up -d --build
+   curl http://127.0.0.1:3000/api/health   # {"status":"ok"}
+   ```
+
+4. **Frontend.** Build it and copy the output to the nginx root:
+
+   ```bash
+   cd client && npm ci && npm run build
+   sudo rsync -a --delete dist/ /var/www/style-work/
+   ```
+
+5. **nginx and HTTPS.** Copy `deploy/nginx.conf` to `/etc/nginx/conf.d/style-work.conf`, get the
+   certificate with `sudo certbot certonly --nginx -d style-work.brijeshhq.com`, then
+   `sudo nginx -t && sudo systemctl reload nginx`.
+6. **Smoke test.** Open <https://style-work.brijeshhq.com/api/health>, then add, search, update
+   and delete a lead in the app.
+
+**Redeploying** is `git pull`, then `docker compose up -d --build` for the API and step 4 for the
+frontend.
+
+The API and frontend can also be hosted separately (for example the API on a Node host and the
+frontend on a static host): set `CORS_ORIGIN` on the API to the frontend's origin, and build the
+frontend with `VITE_STYLE_WORK_API_URL` set to the API's URL (it is built into the bundle).
 
 ## Environment variables
 
@@ -343,7 +386,7 @@ own origin.
 | `STYLE_WORK_DB_URL` | yes      |                         | PostgreSQL connection string (`DATABASE_URL` is used as a fallback) |
 | `PORT`              | no       | `3000`                  | Port the API listens on                                       |
 | `CORS_ORIGIN`       | no       | `http://localhost:5173` | Comma-separated list of allowed origins                       |
-| `TRUST_PROXY`       | no       | unset                   | Number of reverse proxies in front of the API (`1` on Render) |
+| `TRUST_PROXY`       | no       | unset                   | Number of reverse proxies in front of the API (`1` behind nginx) |
 | `TEST_DATABASE_URL` | no       |                         | Enables the PostgreSQL tests (see [Tests](#tests))            |
 
 ### `client/.env.local`
