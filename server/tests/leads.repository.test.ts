@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { escapeIdentifier } from 'pg';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { pool } from '../src/db.js';
 import {
   createLead,
@@ -11,15 +11,26 @@ import {
 
 // Runs in a temporary schema that is dropped afterwards, so TEST_DATABASE_URL
 // can safely point at the development database.
-const schema = escapeIdentifier(`test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+const { schema } = vi.hoisted(() => ({
+  schema: `"test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}"`,
+}));
+
+// The pool waits for onConnect, so every connection is bound to the temporary
+// schema before the repository gets it.
+vi.mock('../src/db.js', async () => {
+  const { Pool } = await import('pg');
+  return {
+    pool: new Pool({
+      connectionString: process.env.TEST_DATABASE_URL,
+      onConnect: async (client) => {
+        await client.query(`SET search_path TO ${schema}`);
+      },
+    }),
+  };
+});
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)('leads repository (PostgreSQL)', () => {
   beforeAll(async () => {
-    // Queries on a client run in order, so this SET always precedes the test's query.
-    pool.on('connect', (client) => {
-      void client.query(`SET search_path TO ${schema}`);
-    });
-
     await pool.query(`CREATE SCHEMA ${schema}`);
     const { rows } = await pool.query<{ schema: string }>('SELECT current_schema() AS schema');
     if (escapeIdentifier(rows[0]?.schema ?? '') !== schema) {
