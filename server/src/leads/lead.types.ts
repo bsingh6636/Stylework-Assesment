@@ -14,10 +14,9 @@ export interface Lead {
   createdAt: Date;
 }
 
+// New leads always start with the database default status ('new').
 export interface CreateLeadInput {
   name: string;
   email: string;
   phone: string;
-  // Omit to use the database default ('new').
-  status?: LeadStatus;
 }
