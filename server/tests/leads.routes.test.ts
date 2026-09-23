@@ -4,6 +4,7 @@ import { createApp } from '../src/app.js';
 import type { Lead } from '../src/leads/lead.types.js';
 import {
   createLead,
+  deleteLead,
   DuplicateEmailError,
   listLeads,
   updateLeadStatus,
@@ -11,7 +12,13 @@ import {
 
 vi.mock('../src/leads/leads.repository.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/leads/leads.repository.js')>();
-  return { ...actual, listLeads: vi.fn(), createLead: vi.fn(), updateLeadStatus: vi.fn() };
+  return {
+    ...actual,
+    listLeads: vi.fn(),
+    createLead: vi.fn(),
+    updateLeadStatus: vi.fn(),
+    deleteLead: vi.fn(),
+  };
 });
 
 const app = createApp();
@@ -55,6 +62,13 @@ describe('GET /api/leads', () => {
 
     expect(res.status).toBe(200);
     expect(listLeads).toHaveBeenCalledWith({ search: 'asha', status: undefined, ...firstPage });
+  });
+
+  it('rejects a NUL byte in the search term with a 400', async () => {
+    const res = await request(app).get('/api/leads?search=asha%00');
+
+    expect(res.status).toBe(400);
+    expect(listLeads).not.toHaveBeenCalled();
   });
 
   it('treats a blank search as no search', async () => {
@@ -138,6 +152,16 @@ describe('POST /api/leads', () => {
     expect(createLead).not.toHaveBeenCalled();
   });
 
+  it('rejects a NUL byte with a 400 before it reaches PostgreSQL', async () => {
+    const res = await request(app)
+      .post('/api/leads')
+      .send({ name: 'Asha\u0000Rao', email: 'asha@example.com', phone: '9876543210' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.details).toEqual({ name: 'Name contains invalid characters' });
+    expect(createLead).not.toHaveBeenCalled();
+  });
+
   it('rejects a request without a JSON object body', async () => {
     const res = await request(app).post('/api/leads').send([lead]);
 
@@ -202,5 +226,33 @@ describe('PATCH /api/leads/:id', () => {
 
     expect(res.status).toBe(400);
     expect(updateLeadStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe('DELETE /api/leads/:id', () => {
+  it('deletes the lead and returns 204 with no body', async () => {
+    vi.mocked(deleteLead).mockResolvedValue(true);
+
+    const res = await request(app).delete('/api/leads/1');
+
+    expect(res.status).toBe(204);
+    expect(res.text).toBe('');
+    expect(deleteLead).toHaveBeenCalledWith(1);
+  });
+
+  it('returns 404 when the lead does not exist', async () => {
+    vi.mocked(deleteLead).mockResolvedValue(false);
+
+    const res = await request(app).delete('/api/leads/42');
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('Lead 42 not found');
+  });
+
+  it.each(['abc', '0', '-1', '1.5', '99999999999'])('rejects invalid id %s', async (id) => {
+    const res = await request(app).delete(`/api/leads/${id}`);
+
+    expect(res.status).toBe(400);
+    expect(deleteLead).not.toHaveBeenCalled();
   });
 });

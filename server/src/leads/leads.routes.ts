@@ -1,6 +1,12 @@
 import { Router } from 'express';
 import { HttpError } from '../errors.js';
-import { createLead, DuplicateEmailError, listLeads, updateLeadStatus } from './leads.repository.js';
+import {
+  createLead,
+  deleteLead,
+  DuplicateEmailError,
+  listLeads,
+  updateLeadStatus,
+} from './leads.repository.js';
 import {
   parseCreateLeadInput,
   parseLeadId,
@@ -46,4 +52,12 @@ leadsRouter.patch('/:id', async (req, res) => {
     throw new HttpError(404, `Lead ${id} not found`);
   }
   res.json(lead);
+});
+
+leadsRouter.delete('/:id', async (req, res) => {
+  const id = parseLeadId(req.params.id);
+  if (!(await deleteLead(id))) {
+    throw new HttpError(404, `Lead ${id} not found`);
+  }
+  res.status(204).end();
 });

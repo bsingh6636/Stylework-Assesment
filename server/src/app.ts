@@ -13,7 +13,7 @@ export function createApp() {
   app.set('trust proxy', config.trustProxy);
 
   app.use(helmet());
-  app.use(cors({ origin: config.corsOrigins, methods: ['GET', 'POST', 'PATCH'] }));
+  app.use(cors({ origin: config.corsOrigins, methods: ['GET', 'POST', 'PATCH', 'DELETE'] }));
   app.use(limiters.requests);
   app.use(limiters.writes);
   app.use(express.json({ limit: '10kb' }));

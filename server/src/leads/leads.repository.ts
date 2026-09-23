@@ -38,8 +38,29 @@ function escapeLikePattern(value: string): string {
   return value.replace(/[\\%_]/g, (char) => `\\${char}`);
 }
 
-const LIST_FILTER = `($1::text IS NULL OR name ILIKE $1 OR email ILIKE $1 OR phone ILIKE $1)
+const PHONE_LIKE_TERM = /^[\d\s\-().+]+$/;
+
+// Every word has to match the name, email or phone, in any order, so "rao asha"
+// finds "Asha Rao". A term that looks like a phone number also matches on its
+// digits alone, so "9876543210" finds "+91 98765 43210".
+const LIST_FILTER = `($1::text[] IS NULL
+      OR regexp_replace(phone, '[^0-9]', '', 'g') LIKE $3::text
+      OR NOT EXISTS (
+        SELECT 1
+          FROM unnest($1::text[]) AS word(pattern)
+         WHERE NOT (name ILIKE pattern OR email ILIKE pattern OR phone ILIKE pattern)))
     AND ($2::text IS NULL OR status = $2)`;
+
+function searchPatterns(search: string | undefined): [string[] | null, string | null] {
+  const term = search?.trim();
+  if (!term) {
+    return [null, null];
+  }
+  const words = term.split(/\s+/).map((word) => `%${escapeLikePattern(word)}%`);
+  // Only for phone-like terms, or "asha9" would match every phone containing a 9.
+  const digits = PHONE_LIKE_TERM.test(term) ? term.replace(/\D/g, '') : '';
+  return [words, digits ? `%${digits}%` : null];
+}
 
 export async function listLeads({
   search,
@@ -47,9 +68,8 @@ export async function listLeads({
   page,
   limit,
 }: LeadListQuery): Promise<{ leads: Lead[]; total: number }> {
-  const term = search?.trim();
-  const pattern = term ? `%${escapeLikePattern(term)}%` : null;
-  const filterParams = [pattern, status ?? null];
+  const [words, digits] = searchPatterns(search);
+  const filterParams = [words, status ?? null, digits];
 
   // Separate queries so the total is still known when the page is past the end.
   const [pageResult, countResult] = await Promise.all([
@@ -58,7 +78,7 @@ export async function listLeads({
          FROM leads
         WHERE ${LIST_FILTER}
         ORDER BY created_at DESC, id DESC
-        LIMIT $3 OFFSET $4`,
+        LIMIT $4 OFFSET $5`,
       [...filterParams, limit, (page - 1) * limit],
     ),
     pool.query<{ total: number }>(
@@ -96,4 +116,9 @@ export async function updateLeadStatus(id: number, status: LeadStatus): Promise<
   );
   const row = rows[0];
   return row ? toLead(row) : null;
+}
+
+export async function deleteLead(id: number): Promise<boolean> {
+  const { rowCount } = await pool.query('DELETE FROM leads WHERE id = $1', [id]);
+  return rowCount === 1;
 }

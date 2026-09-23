@@ -1,12 +1,18 @@
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app.js';
-import { createLead, listLeads } from '../src/leads/leads.repository.js';
+import { createLead, deleteLead, listLeads } from '../src/leads/leads.repository.js';
 import { REQUESTS_PER_WINDOW, WRITES_PER_WINDOW } from '../src/rateLimit.js';
 
 vi.mock('../src/leads/leads.repository.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/leads/leads.repository.js')>();
-  return { ...actual, listLeads: vi.fn(), createLead: vi.fn(), updateLeadStatus: vi.fn() };
+  return {
+    ...actual,
+    listLeads: vi.fn(),
+    createLead: vi.fn(),
+    updateLeadStatus: vi.fn(),
+    deleteLead: vi.fn(),
+  };
 });
 
 const newLead = { name: 'Asha Rao', email: 'asha@example.com', phone: '9876543210' };
@@ -46,7 +52,7 @@ describe('security headers', () => {
 
     expect(res.status).toBe(204);
     expect(res.headers['access-control-allow-origin']).toBe('http://localhost:5173');
-    expect(res.headers['access-control-allow-methods']).toBe('GET,POST,PATCH');
+    expect(res.headers['access-control-allow-methods']).toBe('GET,POST,PATCH,DELETE');
   });
 
   it('does not allow unknown origins', async () => {
@@ -80,6 +86,15 @@ describe('rate limiting', () => {
     expect(limited.headers['ratelimit']).toBeDefined();
     expect(createLead).toHaveBeenCalledTimes(WRITES_PER_WINDOW);
     expect((await request(app).get('/api/leads')).status).toBe(200);
+  });
+
+  it('counts deletes as writes', async () => {
+    vi.mocked(deleteLead).mockResolvedValue(true);
+    const app = createApp();
+    await repeat(WRITES_PER_WINDOW, () => request(app).delete('/api/leads/1').expect(204));
+
+    expect((await request(app).delete('/api/leads/1')).status).toBe(429);
+    expect(deleteLead).toHaveBeenCalledTimes(WRITES_PER_WINDOW);
   });
 
   it('limits all requests per IP but never the health check', async () => {

@@ -3,6 +3,7 @@ import { LEAD_STATUSES, type CreateLeadInput, type LeadStatus } from './lead.typ
 
 const MAX_NAME_LENGTH = 100;
 const MAX_EMAIL_LENGTH = 254;
+const MAX_PHONE_LENGTH = 30;
 const MAX_SEARCH_LENGTH = 100;
 const MAX_POSTGRES_INTEGER = 2_147_483_647;
 
@@ -11,8 +12,12 @@ export const MAX_PAGE_SIZE = 100;
 
 const INVALID_STATUS_MESSAGE = `Status must be one of: ${LEAD_STATUSES.join(', ')}`;
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
 const PHONE_PATTERN = /^\+?[\d\s\-().]+$/;
+
+// Includes NUL, which PostgreSQL rejects in text columns (a 500 rather than a 400).
+const CONTROL_CHARACTER = /\p{Cc}/u;
+const INVISIBLE_EDGES = /^[\s\p{Cf}]+|[\s\p{Cf}]+$/gu;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -22,8 +27,13 @@ function isLeadStatus(value: unknown): value is LeadStatus {
   return typeof value === 'string' && (LEAD_STATUSES as readonly string[]).includes(value);
 }
 
-function trimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
+// Collapses whitespace runs (including line breaks) to one space, and trims
+// zero-width characters too, so a value that only looks empty counts as empty.
+function cleanText(value: unknown): string {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.normalize('NFC').replace(/\s+/g, ' ').replace(INVISIBLE_EDGES, '');
 }
 
 function toPositiveInteger(value: unknown, max: number): number | null {
@@ -36,20 +46,26 @@ export function parseCreateLeadInput(body: unknown): CreateLeadInput {
     throw new HttpError(400, 'Request body must be a JSON object');
   }
 
-  const name = trimmedString(body.name);
-  const email = trimmedString(body.email);
-  const phone = trimmedString(body.phone);
+  const name = cleanText(body.name);
+  const email = cleanText(body.email);
+  const phone = cleanText(body.phone);
   const errors: Record<string, string> = {};
 
   if (!name) {
     errors.name = 'Name is required';
   } else if (name.length > MAX_NAME_LENGTH) {
     errors.name = `Name must be at most ${MAX_NAME_LENGTH} characters`;
+  } else if (CONTROL_CHARACTER.test(name)) {
+    errors.name = 'Name contains invalid characters';
   }
 
   if (!email) {
     errors.email = 'Email is required';
-  } else if (email.length > MAX_EMAIL_LENGTH || !EMAIL_PATTERN.test(email)) {
+  } else if (
+    email.length > MAX_EMAIL_LENGTH ||
+    CONTROL_CHARACTER.test(email) ||
+    !EMAIL_PATTERN.test(email)
+  ) {
     errors.email = 'Email must be a valid email address';
   }
 
@@ -57,7 +73,12 @@ export function parseCreateLeadInput(body: unknown): CreateLeadInput {
   const digitCount = phone.replace(/\D/g, '').length;
   if (!phone) {
     errors.phone = 'Phone is required';
-  } else if (!PHONE_PATTERN.test(phone) || digitCount < 7 || digitCount > 15) {
+  } else if (
+    phone.length > MAX_PHONE_LENGTH ||
+    !PHONE_PATTERN.test(phone) ||
+    digitCount < 7 ||
+    digitCount > 15
+  ) {
     errors.phone = 'Phone must be a valid phone number';
   }
 
@@ -125,9 +146,12 @@ export function parseSearch(value: unknown): string | undefined {
   if (typeof value !== 'string') {
     throw new HttpError(400, 'search must be a single string');
   }
-  const term = value.trim();
+  const term = cleanText(value);
   if (term.length > MAX_SEARCH_LENGTH) {
     throw new HttpError(400, `search must be at most ${MAX_SEARCH_LENGTH} characters`);
+  }
+  if (CONTROL_CHARACTER.test(term)) {
+    throw new HttpError(400, 'search contains invalid characters');
   }
   return term || undefined;
 }

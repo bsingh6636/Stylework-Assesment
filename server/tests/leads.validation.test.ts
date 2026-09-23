@@ -26,6 +26,32 @@ describe('parseCreateLeadInput', () => {
     expect(parseCreateLeadInput({ ...valid, name: '  Asha Rao  ' })).toEqual(valid);
   });
 
+  it('collapses runs of whitespace and line breaks to single spaces', () => {
+    expect(
+      parseCreateLeadInput({ name: 'Asha \n  Rao', email: valid.email, phone: '+91   98765\t43210' }),
+    ).toEqual(valid);
+    expect(parseCreateLeadInput({ ...valid, phone: `98765${' '.repeat(5000)}43210` }).phone).toBe(
+      '98765 43210',
+    );
+  });
+
+  it('normalizes Unicode so the same name is always stored the same way', () => {
+    // 'e' followed by a combining accent becomes the single character 'é'.
+    expect(parseCreateLeadInput({ ...valid, name: 'Jose\u0301' }).name).toBe('Jos\u00e9');
+  });
+
+  it('treats a name made only of invisible characters as missing', () => {
+    // Zero-width spaces and a byte order mark around a normal space.
+    expect(fieldErrors({ ...valid, name: '\u200b \ufeff\u200b' })).toEqual({ name: 'Name is required' });
+  });
+
+  it('rejects control characters such as NUL', () => {
+    expect(fieldErrors({ ...valid, name: 'Asha\u0000Rao' })).toEqual({ name: 'Name contains invalid characters' });
+    expect(fieldErrors({ ...valid, email: 'asha\u0000@example.com' })).toEqual({
+      email: 'Email must be a valid email address',
+    });
+  });
+
   it('ignores unknown fields such as status', () => {
     expect(parseCreateLeadInput({ ...valid, status: 'converted', id: 7 })).toEqual(valid);
   });
@@ -34,7 +60,16 @@ describe('parseCreateLeadInput', () => {
     expect(parseCreateLeadInput({ ...valid, email }).email).toBe(email);
   });
 
-  it.each(['asha', 'asha@', '@example.com', 'asha@example', 'as ha@example.com'])(
+  it.each([
+    'asha',
+    'asha@',
+    '@example.com',
+    'asha@example',
+    'as ha@example.com',
+    'asha@.example.com',
+    'asha@example..com',
+    'asha@example.com.',
+  ])(
     'rejects email %s',
     (email) => {
       expect(fieldErrors({ ...valid, email })).toEqual({ email: 'Email must be a valid email address' });
@@ -45,7 +80,14 @@ describe('parseCreateLeadInput', () => {
     expect(parseCreateLeadInput({ ...valid, phone }).phone).toBe(phone);
   });
 
-  it.each(['abc', '12345', '+91 98765 43210 12345', '98765x43210', '++919876543210'])(
+  it.each([
+    'abc',
+    '12345',
+    '+91 98765 43210 12345',
+    '98765x43210',
+    '++919876543210',
+    '9 - 8 - 7 - 6 - 5 - 4 - 3 - 2 - 1',
+  ])(
     'rejects phone %s',
     (phone) => {
       expect(fieldErrors({ ...valid, phone })).toEqual({ phone: 'Phone must be a valid phone number' });
@@ -87,13 +129,15 @@ describe('parseSearch', () => {
     expect(parseSearch('   ')).toBeUndefined();
   });
 
-  it('trims the search term', () => {
+  it('trims the search term and collapses inner whitespace', () => {
     expect(parseSearch('  asha ')).toBe('asha');
+    expect(parseSearch(' asha \t  rao ')).toBe('asha rao');
   });
 
-  it('rejects arrays and overly long terms', () => {
+  it('rejects arrays, overly long terms and control characters', () => {
     expect(() => parseSearch(['a', 'b'])).toThrow(HttpError);
     expect(() => parseSearch('x'.repeat(101))).toThrow(HttpError);
+    expect(() => parseSearch('asha\u0000')).toThrow(HttpError);
   });
 });
 

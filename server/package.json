@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:schema": "tsx scripts/apply-schema.ts"
+    "db:schema": "tsx scripts/apply-schema.ts",
+    "db:seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
     "cors": "^2.8.6",

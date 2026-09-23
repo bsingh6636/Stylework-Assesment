@@ -5,6 +5,7 @@ import { pool } from '../src/db.js';
 import type { LeadFilters } from '../src/leads/lead.types.js';
 import {
   createLead,
+  deleteLead,
   DuplicateEmailError,
   listLeads,
   updateLeadStatus,
@@ -96,6 +97,22 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)('leads repository (PostgreSQL)',
       expect(await namesFor({ search: '555 0000' })).toEqual(['Ravi 50% Off']);
     });
 
+    it('matches every word of the search term, in any order and any field', async () => {
+      expect(await namesFor({ search: 'rao asha' })).toEqual(['Asha Rao']);
+      expect(await namesFor({ search: 'ravi shop.in' })).toEqual(['Ravi 50% Off']);
+      expect(await namesFor({ search: 'asha shop.in' })).toEqual([]);
+    });
+
+    it('finds a phone number typed without its spaces or punctuation', async () => {
+      expect(await namesFor({ search: '9876543210' })).toEqual(['Asha Rao']);
+      expect(await namesFor({ search: '+91-98765-43210' })).toEqual(['Asha Rao']);
+      expect(await namesFor({ search: '0225550000' })).toEqual(['Ravi 50% Off']);
+    });
+
+    it('does not match phones on the digits of a term that is not a phone number', async () => {
+      expect(await namesFor({ search: 'asha9' })).toEqual([]);
+    });
+
     it('treats LIKE wildcards in the search term literally', async () => {
       expect(await namesFor({ search: '%' })).toEqual(['Ravi 50% Off']);
       expect(await namesFor({ search: '_' })).toEqual(['Meera_Iyer']);
@@ -175,6 +192,36 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)('leads repository (PostgreSQL)',
 
     it('returns null for an unknown id', async () => {
       expect(await updateLeadStatus(999, 'lost')).toBeNull();
+    });
+  });
+
+  describe('deleteLead', () => {
+    it('deletes only the given lead', async () => {
+      const asha = await createLead({ name: 'Asha Rao', email: 'asha@example.com', phone: '9876543210' });
+      await createLead({ name: 'Ravi Kumar', email: 'ravi@example.com', phone: '9123456789' });
+
+      expect(await deleteLead(asha.id)).toBe(true);
+
+      const { leads, total } = await listLeads(allOnOnePage);
+      expect(leads.map((lead) => lead.name)).toEqual(['Ravi Kumar']);
+      expect(total).toBe(1);
+    });
+
+    it('returns false for an unknown or already deleted id', async () => {
+      const { id } = await createLead({ name: 'Asha Rao', email: 'asha@example.com', phone: '9876543210' });
+      await deleteLead(id);
+
+      expect(await deleteLead(id)).toBe(false);
+      expect(await deleteLead(999)).toBe(false);
+    });
+
+    it('frees the email for a new lead', async () => {
+      const { id } = await createLead({ name: 'Asha Rao', email: 'asha@example.com', phone: '9876543210' });
+      await deleteLead(id);
+
+      await expect(
+        createLead({ name: 'Asha Rao', email: 'asha@example.com', phone: '9876543210' }),
+      ).resolves.toMatchObject({ email: 'asha@example.com' });
     });
   });
 });
