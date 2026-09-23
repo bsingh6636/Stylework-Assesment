@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, createLead, listLeads, updateLeadStatus } from './api.ts'
+import { ApiError, createLead, deleteLead, listLeads, updateLeadStatus } from './api.ts'
 import { asha } from './test/fixtures.ts'
 
 const fetchMock = vi.fn<typeof fetch>()
@@ -77,6 +77,25 @@ describe('updateLeadStatus', () => {
   })
 })
 
+describe('deleteLead', () => {
+  it('sends a DELETE for the given lead and accepts an empty 204', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
+
+    await expect(deleteLead(7)).resolves.toBeUndefined()
+
+    const { url, init } = lastRequest()
+    expect(url).toMatch(/\/api\/leads\/7$/)
+    expect(init.method).toBe('DELETE')
+    expect(init.headers).toBeUndefined()
+  })
+
+  it('rejects with the API error when the lead is missing', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ error: 'Lead 7 not found' }, 404))
+
+    await expect(deleteLead(7)).rejects.toMatchObject({ status: 404, message: 'Lead 7 not found' })
+  })
+})
+
 describe('errors', () => {
   it('turns an error response into an ApiError with the field details', async () => {
     fetchMock.mockResolvedValue(
@@ -104,7 +123,7 @@ describe('errors', () => {
 
     await expect(listLeads(firstPage)).rejects.toMatchObject({
       status: 0,
-      message: 'Could not reach the server. Check that the API is running.',
+      message: 'Could not reach the server. Check your connection and try again.',
     })
   })
 })

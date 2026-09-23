@@ -1,14 +1,17 @@
 import { ChevronDown, CircleAlert, Inbox, LoaderCircle, RotateCw, Search, SearchX, UserPlus } from 'lucide-react'
 import { useState } from 'react'
 import { toast, Toaster } from 'sonner'
-import { updateLeadStatus } from './api.ts'
+import { ApiError, deleteLead, updateLeadStatus } from './api.ts'
+import DeleteLeadDialog from './components/DeleteLeadDialog.tsx'
 import LeadForm from './components/LeadForm.tsx'
-import LeadTable from './components/LeadTable.tsx'
+import LeadTable, { LeadTableSkeleton } from './components/LeadTable.tsx'
 import Pagination from './components/Pagination.tsx'
 import { useLeadQuery } from './hooks/useLeadQuery.ts'
 import { useLeads } from './hooks/useLeads.ts'
 import { LEAD_STATUSES, STATUS_LABELS, type Lead, type LeadStatus } from './types.ts'
 import './App.css'
+
+const errorMessage = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong')
 
 function noMatchesMessage(search: string, status?: LeadStatus) {
   const leads = status ? `${STATUS_LABELS[status].toLowerCase()} leads` : 'leads'
@@ -17,9 +20,14 @@ function noMatchesMessage(search: string, status?: LeadStatus) {
 
 function App() {
   const [isFormOpen, setIsFormOpen] = useState(false)
+  const [leadToDelete, setLeadToDelete] = useState<Lead | null>(null)
   const { query, searchInput, setSearchInput, setStatus, setLimit, setPage } = useLeadQuery()
-  const { leads, total, error, isLoading, reload, replaceLead } = useLeads(query)
+  const { leads, total, error, isLoading, loadedSearch, reload, replaceLead } = useLeads(query)
   const { search, status } = query
+  const isRefreshing = isLoading && leads.length > 0
+  // True from the first keystroke until the results for the new term arrive.
+  const isSearching =
+    searchInput.trim() !== search || (isLoading && loadedSearch !== undefined && loadedSearch !== search)
 
   // A shared link or the last lead leaving a filter can point past the end.
   const totalPages = Math.max(1, Math.ceil(total / query.limit))
@@ -38,8 +46,25 @@ function App() {
       replaceLead(updated)
       toast.success(`${updated.name} is now ${STATUS_LABELS[updated.status]}`)
     } catch (err) {
-      toast.error(`Couldn't update ${lead.name}: ${err instanceof Error ? err.message : 'Something went wrong'}`)
+      toast.error(`Couldn't update ${lead.name}: ${errorMessage(err)}`)
     }
+  }
+
+  // Refetches rather than removing the row locally, so the page refills from
+  // the next one and the total stays right.
+  async function handleDelete(lead: Lead) {
+    try {
+      await deleteLead(lead.id)
+      toast.success(`${lead.name} was deleted`)
+    } catch (err) {
+      if (!(err instanceof ApiError && err.status === 404)) {
+        toast.error(`Couldn't delete ${lead.name}: ${errorMessage(err)}`)
+        return
+      }
+      toast.info(`${lead.name} had already been deleted`)
+    }
+    setLeadToDelete(null)
+    reload()
   }
 
   let content
@@ -55,12 +80,7 @@ function App() {
       </div>
     )
   } else if (leads.length === 0 && isLoading) {
-    content = (
-      <p className="message">
-        <LoaderCircle className="spin" size={20} aria-hidden="true" />
-        Loading leads…
-      </p>
-    )
+    content = <LeadTableSkeleton />
   } else if (leads.length === 0) {
     content =
       search || status ? (
@@ -77,7 +97,12 @@ function App() {
   } else {
     content = (
       <>
-        <LeadTable leads={leads} onStatusChange={handleStatusChange} />
+        <LeadTable
+          leads={leads}
+          isBusy={isRefreshing}
+          onStatusChange={handleStatusChange}
+          onDelete={setLeadToDelete}
+        />
         <Pagination
           page={query.page}
           limit={query.limit}
@@ -90,7 +115,9 @@ function App() {
   }
 
   let summary = null
-  if (isLoading && leads.length > 0) {
+  if (isLoading && leads.length === 0) {
+    summary = <span className="skeleton skeleton-summary" aria-hidden="true" />
+  } else if (isRefreshing) {
     summary = (
       <>
         <LoaderCircle className="spin" size={14} aria-hidden="true" />
@@ -144,8 +171,12 @@ function App() {
             </p>
           </div>
           <div className="filters">
-            <div className="search">
-              <Search className="search-icon" size={16} aria-hidden="true" />
+            <div className="search" aria-busy={isSearching || undefined}>
+              {isSearching ? (
+                <LoaderCircle className="search-icon spin" size={16} aria-hidden="true" />
+              ) : (
+                <Search className="search-icon" size={16} aria-hidden="true" />
+              )}
               <input
                 type="search"
                 className="search-input"
@@ -174,9 +205,12 @@ function App() {
               <ChevronDown size={16} aria-hidden="true" />
             </div>
           </div>
+          {isRefreshing && <div className="progress-bar" role="progressbar" aria-label="Loading leads" />}
         </div>
         {content}
       </section>
+
+      <DeleteLeadDialog lead={leadToDelete} onClose={() => setLeadToDelete(null)} onConfirm={handleDelete} />
 
       <Toaster position="top-right" theme="system" richColors closeButton />
     </main>

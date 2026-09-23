@@ -3,15 +3,15 @@ import userEvent from '@testing-library/user-event'
 import { toast } from 'sonner'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App.tsx'
-import { ApiError, createLead, listLeads, updateLeadStatus } from './api.ts'
+import { ApiError, createLead, deleteLead, listLeads, updateLeadStatus } from './api.ts'
 import { asha, ravi } from './test/fixtures.ts'
 import type { Lead, LeadPage } from './types.ts'
 
 vi.mock('./api.ts', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api.ts')>()
-  return { ...actual, listLeads: vi.fn(), createLead: vi.fn(), updateLeadStatus: vi.fn() }
+  return { ...actual, listLeads: vi.fn(), createLead: vi.fn(), updateLeadStatus: vi.fn(), deleteLead: vi.fn() }
 })
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }))
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() }, Toaster: () => null }))
 
 const leadNames = () =>
   screen
@@ -41,7 +41,7 @@ describe('App', () => {
     vi.mocked(listLeads).mockResolvedValue(pageOf([asha, ravi]))
     render(<App />)
 
-    expect(screen.getByText('Loading leads…')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Loading leads…')
     expect(await screen.findByText('2 leads')).toBeInTheDocument()
     expect(leadNames()).toEqual(['Asha Rao', 'Ravi Kumar'])
     expect(listLeads).toHaveBeenCalledWith({ search: '', page: 1, limit: 20 }, expect.any(AbortSignal))
@@ -60,6 +60,48 @@ describe('App', () => {
     // One request on load, then one for the whole term rather than one per keystroke.
     expect(listLeads).toHaveBeenCalledTimes(2)
     expect(lastQuery()).toEqual({ search: 'asha', page: 1, limit: 20 })
+  })
+
+  it('keeps the current rows, dimmed under a progress bar, while the next page loads', async () => {
+    vi.mocked(listLeads).mockResolvedValue(pageOf(makeLeads(20), 45))
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('1–20 of 45')
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
+
+    let finish: (page: LeadPage) => void = () => {}
+    vi.mocked(listLeads).mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    await user.click(screen.getByRole('button', { name: 'Page 2' }))
+
+    expect(screen.getByRole('progressbar', { name: 'Loading leads' })).toBeInTheDocument()
+    expect(screen.getByRole('table').parentElement).toHaveAttribute('aria-busy', 'true')
+    expect(leadNames()).toHaveLength(20)
+
+    finish(pageOf(makeLeads(5), 45))
+    await waitFor(() => expect(leadNames()).toHaveLength(5))
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
+    expect(screen.getByRole('table').parentElement).not.toHaveAttribute('aria-busy')
+  })
+
+  it('shows the search as busy from the first keystroke until its results arrive', async () => {
+    vi.mocked(listLeads).mockResolvedValue(pageOf([asha, ravi]))
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('2 leads')
+    const searchBox = () => screen.getByLabelText('Search leads').parentElement
+    expect(searchBox()).not.toHaveAttribute('aria-busy')
+
+    let finish: (page: LeadPage) => void = () => {}
+    vi.mocked(listLeads).mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    await user.type(screen.getByLabelText('Search leads'), 'asha')
+
+    expect(searchBox()).toHaveAttribute('aria-busy', 'true')
+    await waitFor(() => expect(listLeads).toHaveBeenCalledTimes(2))
+    expect(searchBox()).toHaveAttribute('aria-busy', 'true')
+
+    finish(pageOf([asha]))
+    await waitFor(() => expect(searchBox()).not.toHaveAttribute('aria-busy'))
+    expect(leadNames()).toEqual(['Asha Rao'])
   })
 
   it('says when nothing matches the search', async () => {
@@ -115,7 +157,7 @@ describe('App', () => {
 
   it('shows a load error with a working "Try again" button', async () => {
     vi.mocked(listLeads)
-      .mockRejectedValueOnce(new ApiError(0, 'Could not reach the server. Check that the API is running.'))
+      .mockRejectedValueOnce(new ApiError(0, 'Could not reach the server. Check your connection and try again.'))
       .mockResolvedValue(pageOf([asha]))
     const user = userEvent.setup()
     render(<App />)
@@ -193,6 +235,113 @@ describe('App', () => {
     await user.click(toggle)
     // Collapsing hides the form without clearing what was typed.
     expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Asha')
+  })
+
+  describe('deleting a lead', () => {
+    const openDeleteDialog = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.click(screen.getByRole('button', { name: 'Delete Asha Rao' }))
+      return screen.getByRole('dialog', { name: 'Delete lead?' })
+    }
+
+    it('asks for confirmation and does nothing when cancelled', async () => {
+      vi.mocked(listLeads).mockResolvedValue(pageOf([asha, ravi]))
+      const user = userEvent.setup()
+      render(<App />)
+      await screen.findByText('2 leads')
+
+      const dialog = await openDeleteDialog(user)
+      expect(dialog).toHaveTextContent('Asha Rao (asha@example.com) will be removed permanently.')
+      await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(deleteLead).not.toHaveBeenCalled()
+    })
+
+    it('deletes the lead, confirms with a toast and refetches the page', async () => {
+      vi.mocked(listLeads).mockResolvedValue(pageOf([asha, ravi]))
+      vi.mocked(deleteLead).mockResolvedValue(undefined)
+      const user = userEvent.setup()
+      render(<App />)
+      await screen.findByText('2 leads')
+
+      vi.mocked(listLeads).mockResolvedValue(pageOf([ravi]))
+      const dialog = await openDeleteDialog(user)
+      await user.click(within(dialog).getByRole('button', { name: 'Delete lead' }))
+
+      await waitFor(() => expect(leadNames()).toEqual(['Ravi Kumar']))
+      expect(deleteLead).toHaveBeenCalledWith(1)
+      expect(toast.success).toHaveBeenCalledWith('Asha Rao was deleted')
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(screen.getByText('1 lead')).toBeInTheDocument()
+    })
+
+    it('keeps the dialog open and busy until the API answers', async () => {
+      vi.mocked(listLeads).mockResolvedValue(pageOf([asha]))
+      let finish: () => void = () => {}
+      vi.mocked(deleteLead).mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)))
+      const user = userEvent.setup()
+      render(<App />)
+      await screen.findByText('1 lead')
+
+      const dialog = await openDeleteDialog(user)
+      await user.click(within(dialog).getByRole('button', { name: 'Delete lead' }))
+
+      expect(within(dialog).getByRole('button', { name: 'Deleting…' })).toBeDisabled()
+      expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeDisabled()
+      finish()
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    })
+
+    it('keeps the dialog open and shows an error toast when deleting fails', async () => {
+      vi.mocked(listLeads).mockResolvedValue(pageOf([asha]))
+      vi.mocked(deleteLead).mockRejectedValue(new ApiError(500, 'Internal server error'))
+      const user = userEvent.setup()
+      render(<App />)
+      await screen.findByText('1 lead')
+
+      const dialog = await openDeleteDialog(user)
+      await user.click(within(dialog).getByRole('button', { name: 'Delete lead' }))
+
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith("Couldn't delete Asha Rao: Internal server error"),
+      )
+      expect(within(dialog).getByRole('button', { name: 'Delete lead' })).toBeEnabled()
+      expect(listLeads).toHaveBeenCalledTimes(1)
+    })
+
+    it('treats a lead that is already gone as deleted', async () => {
+      vi.mocked(listLeads).mockResolvedValue(pageOf([asha]))
+      vi.mocked(deleteLead).mockRejectedValue(new ApiError(404, 'Lead 1 not found'))
+      const user = userEvent.setup()
+      render(<App />)
+      await screen.findByText('1 lead')
+
+      vi.mocked(listLeads).mockResolvedValue(pageOf([]))
+      const dialog = await openDeleteDialog(user)
+      await user.click(within(dialog).getByRole('button', { name: 'Delete lead' }))
+
+      expect(await screen.findByText('No leads yet. Add your first one above.')).toBeInTheDocument()
+      expect(toast.info).toHaveBeenCalledWith('Asha Rao had already been deleted')
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
+    it('moves back a page after deleting the only lead on the last one', async () => {
+      window.history.replaceState(null, '', '/?page=3')
+      vi.mocked(listLeads).mockResolvedValue({ leads: [asha], total: 41, page: 3, limit: 20 })
+      vi.mocked(deleteLead).mockResolvedValue(undefined)
+      const user = userEvent.setup()
+      render(<App />)
+      await screen.findByText('41–41 of 41')
+
+      vi.mocked(listLeads).mockImplementation(async ({ page }) =>
+        page === 3 ? pageOf([], 40) : pageOf(makeLeads(20), 40),
+      )
+      const dialog = await openDeleteDialog(user)
+      await user.click(within(dialog).getByRole('button', { name: 'Delete lead' }))
+
+      expect(await screen.findByText('21–40 of 40')).toBeInTheDocument()
+      expect(window.location.search).toBe('?page=2')
+    })
   })
 
   describe('pagination', () => {

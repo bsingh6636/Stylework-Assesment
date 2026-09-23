@@ -41,7 +41,7 @@ describe('LeadForm', () => {
     expect(screen.getByLabelText('Name')).toHaveFocus()
   })
 
-  it('disables the button while the lead is being saved', async () => {
+  it('disables the button and locks the fields while the lead is being saved', async () => {
     let resolve: (lead: Lead) => void = () => {}
     vi.mocked(createLead).mockReturnValue(new Promise((r) => (resolve = r)))
     const user = userEvent.setup()
@@ -51,8 +51,11 @@ describe('LeadForm', () => {
     await user.click(screen.getByRole('button', { name: 'Add lead' }))
 
     expect(screen.getByRole('button', { name: 'Adding…' })).toBeDisabled()
+    expect(screen.getByLabelText('Name')).toHaveAttribute('readonly')
+    expect(screen.getByLabelText('Phone').closest('form')).toHaveAttribute('aria-busy', 'true')
     resolve(asha)
     expect(await screen.findByRole('button', { name: 'Add lead' })).toBeEnabled()
+    expect(screen.getByLabelText('Name')).not.toHaveAttribute('readonly')
   })
 
   it("shows the server's validation errors under the matching fields", async () => {
@@ -75,7 +78,8 @@ describe('LeadForm', () => {
     expect(screen.getByLabelText('Phone')).toHaveAccessibleDescription('Phone must be a valid phone number')
     expect(screen.getByLabelText('Email')).not.toHaveAttribute('aria-invalid')
     expect(screen.getByLabelText('Phone')).toHaveValue('123')
-    expect(toast.error).toHaveBeenCalledWith('Please fix the highlighted fields')
+    expect(name).toHaveFocus()
+    expect(toast.error).not.toHaveBeenCalled()
     expect(onCreated).not.toHaveBeenCalled()
   })
 
@@ -95,7 +99,7 @@ describe('LeadForm', () => {
     expect(screen.getByText('Email is required')).toBeInTheDocument()
   })
 
-  it('shows a duplicate email on the email field', async () => {
+  it('shows a duplicate email on the email field and focuses it', async () => {
     vi.mocked(createLead).mockRejectedValue(
       new ApiError(409, 'A lead with email asha@example.com already exists'),
     )
@@ -105,17 +109,30 @@ describe('LeadForm', () => {
     await fillForm(user)
     await user.click(screen.getByRole('button', { name: 'Add lead' }))
 
+    const email = screen.getByLabelText('Email')
     await waitFor(() =>
-      expect(screen.getByLabelText('Email')).toHaveAccessibleDescription(
-        'A lead with email asha@example.com already exists',
-      ),
+      expect(email).toHaveAccessibleDescription('A lead with email asha@example.com already exists'),
     )
-    expect(toast.error).toHaveBeenCalledWith('A lead with email asha@example.com already exists')
+    expect(email).toHaveFocus()
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('reports field errors it cannot show inline in a toast', async () => {
+    vi.mocked(createLead).mockRejectedValue(
+      new ApiError(400, 'Validation failed', { status: 'Status must be one of: new' }),
+    )
+    const user = userEvent.setup()
+    render(<LeadForm onCreated={vi.fn()} />)
+
+    await fillForm(user)
+    await user.click(screen.getByRole('button', { name: 'Add lead' }))
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Couldn't add the lead: Validation failed"))
   })
 
   it('reports other failures in a toast and keeps the values for a retry', async () => {
     vi.mocked(createLead).mockRejectedValue(
-      new ApiError(0, 'Could not reach the server. Check that the API is running.'),
+      new ApiError(0, 'Could not reach the server. Check your connection and try again.'),
     )
     const user = userEvent.setup()
     render(<LeadForm onCreated={vi.fn()} />)
@@ -125,7 +142,7 @@ describe('LeadForm', () => {
 
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith(
-        "Couldn't add the lead: Could not reach the server. Check that the API is running.",
+        "Couldn't add the lead: Could not reach the server. Check your connection and try again.",
       ),
     )
     expect(screen.getByLabelText('Email')).toHaveValue(asha.email)

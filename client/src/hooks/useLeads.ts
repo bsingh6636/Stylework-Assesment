@@ -4,6 +4,7 @@ import type { Lead, LeadQuery } from '../types.ts'
 
 interface LeadsResult {
   requestKey: string
+  search: string
   leads: Lead[]
   total: number
   error: string | null
@@ -20,12 +21,12 @@ export function useLeads({ search, status, page, limit }: LeadQuery) {
 
     listLeads({ search, status, page, limit }, controller.signal)
       .then(({ leads, total }) => {
-        if (!controller.signal.aborted) setResult({ requestKey, leads, total, error: null })
+        if (!controller.signal.aborted) setResult({ requestKey, search, leads, total, error: null })
       })
       .catch((err: unknown) => {
         if (controller.signal.aborted) return
         const message = err instanceof Error ? err.message : 'Something went wrong'
-        setResult({ requestKey, leads: [], total: 0, error: message })
+        setResult({ requestKey, search, leads: [], total: 0, error: message })
       })
 
     return () => controller.abort()
@@ -38,6 +39,8 @@ export function useLeads({ search, status, page, limit }: LeadQuery) {
     total: result?.total ?? 0,
     error: result?.error ?? null,
     isLoading: result?.requestKey !== requestKey,
+    // The search term the shown leads belong to, which lags behind while loading.
+    loadedSearch: result?.search,
     reload,
     replaceLead: (lead: Lead) => {
       setResult(

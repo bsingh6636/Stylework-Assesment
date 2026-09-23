@@ -1,5 +1,6 @@
 import { LoaderCircle, Plus } from 'lucide-react'
-import { useId, useRef, useState, type ChangeEvent, type FormEvent, type Ref } from 'react'
+import { useId, useState, type ChangeEvent, type FormEvent } from 'react'
+import { flushSync } from 'react-dom'
 import { toast } from 'sonner'
 import { ApiError, createLead } from '../api.ts'
 import type { Lead, NewLead } from '../types.ts'
@@ -8,9 +9,17 @@ type FieldName = keyof NewLead
 type FieldErrors = Partial<Record<FieldName, string>>
 
 const EMPTY_LEAD: NewLead = { name: '', email: '', phone: '' }
+const FIELD_NAMES: FieldName[] = ['name', 'email', 'phone']
+// Keep in sync with the limits in server/src/leads/leads.validation.ts.
+const MAX_LENGTHS: Record<FieldName, number> = { name: 100, email: 254, phone: 30 }
 
 interface LeadFormProps {
   onCreated: (lead: Lead) => void
+}
+
+function focusField(form: HTMLFormElement, name: FieldName) {
+  const input = form.elements.namedItem(name)
+  if (input instanceof HTMLInputElement) input.focus()
 }
 
 // Validation lives in the API (single source of truth); its per-field messages
@@ -19,7 +28,6 @@ function LeadForm({ onCreated }: LeadFormProps) {
   const [values, setValues] = useState<NewLead>(EMPTY_LEAD)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const nameInputRef = useRef<HTMLInputElement>(null)
 
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
     const name = event.target.name as FieldName
@@ -29,6 +37,7 @@ function LeadForm({ onCreated }: LeadFormProps) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const form = event.currentTarget
     setIsSubmitting(true)
     setErrors({})
 
@@ -37,14 +46,16 @@ function LeadForm({ onCreated }: LeadFormProps) {
       setValues(EMPTY_LEAD)
       onCreated(lead)
       toast.success(`${lead.name} was added`)
-      nameInputRef.current?.focus()
+      focusField(form, 'name')
     } catch (err) {
-      if (err instanceof ApiError && err.details) {
-        setErrors(err.details)
-        toast.error('Please fix the highlighted fields')
-      } else if (err instanceof ApiError && err.status === 409) {
-        setErrors({ email: err.message })
-        toast.error(err.message)
+      const fieldErrors: FieldErrors | undefined =
+        err instanceof ApiError ? (err.details ?? (err.status === 409 ? { email: err.message } : undefined)) : undefined
+      const firstInvalid = FIELD_NAMES.find((name) => fieldErrors?.[name])
+
+      if (fieldErrors && firstInvalid) {
+        // Rendered before focusing, so screen readers announce the field together with its error.
+        flushSync(() => setErrors(fieldErrors))
+        focusField(form, firstInvalid)
       } else {
         toast.error(`Couldn't add the lead: ${err instanceof Error ? err.message : 'Something went wrong'}`)
       }
@@ -54,7 +65,7 @@ function LeadForm({ onCreated }: LeadFormProps) {
   }
 
   return (
-    <form className="lead-form" onSubmit={handleSubmit} noValidate>
+    <form className="lead-form" onSubmit={handleSubmit} noValidate aria-busy={isSubmitting || undefined}>
       <Field
         label="Name"
         name="name"
@@ -62,8 +73,8 @@ function LeadForm({ onCreated }: LeadFormProps) {
         placeholder="Asha Rao"
         value={values.name}
         error={errors.name}
+        readOnly={isSubmitting}
         onChange={handleChange}
-        inputRef={nameInputRef}
       />
       <Field
         label="Email"
@@ -73,6 +84,7 @@ function LeadForm({ onCreated }: LeadFormProps) {
         placeholder="asha@example.com"
         value={values.email}
         error={errors.email}
+        readOnly={isSubmitting}
         onChange={handleChange}
       />
       <Field
@@ -83,6 +95,7 @@ function LeadForm({ onCreated }: LeadFormProps) {
         placeholder="+91 98765 43210"
         value={values.phone}
         error={errors.phone}
+        readOnly={isSubmitting}
         onChange={handleChange}
       />
       <button type="submit" className="button-primary" disabled={isSubmitting}>
@@ -105,11 +118,12 @@ interface FieldProps {
   placeholder: string
   value: string
   error?: string
+  // Read-only rather than disabled while saving, so an invalid field can still take focus.
+  readOnly: boolean
   onChange: (event: ChangeEvent<HTMLInputElement>) => void
-  inputRef?: Ref<HTMLInputElement>
 }
 
-function Field({ label, name, type = 'text', error, inputRef, ...inputProps }: FieldProps) {
+function Field({ label, name, type = 'text', error, ...inputProps }: FieldProps) {
   const id = useId()
   const errorId = `${id}-error`
 
@@ -118,10 +132,10 @@ function Field({ label, name, type = 'text', error, inputRef, ...inputProps }: F
       <label htmlFor={id}>{label}</label>
       <input
         id={id}
-        ref={inputRef}
         name={name}
         type={type}
-        maxLength={name === 'email' ? 254 : 100}
+        required
+        maxLength={MAX_LENGTHS[name]}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? errorId : undefined}
         {...inputProps}

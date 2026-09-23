@@ -22,7 +22,7 @@ interface ErrorBody {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH'
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
   body?: unknown
   signal?: AbortSignal
 }
@@ -39,7 +39,7 @@ async function request<T>(path: string, { method = 'GET', body, signal }: Reques
     })
   } catch (err) {
     if (signal?.aborted) throw err
-    throw new ApiError(0, 'Could not reach the server. Check that the API is running.')
+    throw new ApiError(0, 'Could not reach the server. Check your connection and try again.')
   }
 
   const data: unknown = await res.json().catch(() => null)
@@ -63,4 +63,8 @@ export function createLead(lead: NewLead): Promise<Lead> {
 
 export function updateLeadStatus(id: number, status: LeadStatus): Promise<Lead> {
   return request<Lead>(`/api/leads/${id}`, { method: 'PATCH', body: { status } })
+}
+
+export async function deleteLead(id: number): Promise<void> {
+  await request<null>(`/api/leads/${id}`, { method: 'DELETE' })
 }
