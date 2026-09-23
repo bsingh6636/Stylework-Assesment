@@ -41,6 +41,9 @@ npm install
 npm run dev            # http://localhost:5173
 ```
 
+The frontend calls the API at `http://localhost:3000` by default. To use a different URL,
+copy `client/.env.example` to `client/.env.local` and set `VITE_API_URL`.
+
 ## Backend scripts (`server/`)
 
 | Script               | What it does                                    |
@@ -115,3 +118,9 @@ They create a temporary schema, apply `db/schema.sql` to it and drop it afterwar
 | `PORT`              | no       | `3000`                  | Port the API listens on                      |
 | `CORS_ORIGIN`       | no       | `http://localhost:5173` | Comma-separated list of allowed origins      |
 | `TEST_DATABASE_URL` | no       |                         | Enables the PostgreSQL tests (see Tests)     |
+
+## Environment variables (`client/.env.local`)
+
+| Variable       | Required | Default                 | Description                                        |
+| -------------- | -------- | ----------------------- | -------------------------------------------------- |
+| `VITE_API_URL` | no       | `http://localhost:3000` | API base URL (public: it's built into the JS bundle) |

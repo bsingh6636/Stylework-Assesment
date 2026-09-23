@@ -1,121 +1,90 @@
+import { CircleAlert, Inbox, LoaderCircle, Search, SearchX } from 'lucide-react'
 import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
+import LeadTable from './components/LeadTable.tsx'
+import { useDebouncedValue } from './hooks/useDebouncedValue.ts'
+import { useLeads } from './hooks/useLeads.ts'
 import './App.css'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [search, setSearch] = useState('')
+  const debouncedSearch = useDebouncedValue(search.trim(), 300)
+  const { leads, error, isLoading } = useLeads(debouncedSearch)
+
+  let content
+  if (error && !isLoading) {
+    content = (
+      <p className="message message-error" role="alert">
+        <CircleAlert size={20} aria-hidden="true" />
+        {error}
+      </p>
+    )
+  } else if (leads.length === 0 && isLoading) {
+    content = (
+      <p className="message">
+        <LoaderCircle className="spin" size={20} aria-hidden="true" />
+        Loading leads…
+      </p>
+    )
+  } else if (leads.length === 0) {
+    content = debouncedSearch ? (
+      <p className="message">
+        <SearchX size={20} aria-hidden="true" />
+        No leads match “{debouncedSearch}”.
+      </p>
+    ) : (
+      <p className="message">
+        <Inbox size={20} aria-hidden="true" />
+        No leads yet.
+      </p>
+    )
+  } else {
+    content = <LeadTable leads={leads} />
+  }
+
+  // The count is only shown once it's accurate (not while loading or on error).
+  let summary = null
+  if (isLoading && leads.length > 0) {
+    summary = (
+      <>
+        <LoaderCircle className="spin" size={14} aria-hidden="true" />
+        Searching…
+      </>
+    )
+  } else if (!isLoading && !error) {
+    summary = `${leads.length} ${leads.length === 1 ? 'lead' : 'leads'}`
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
+    <main className="app">
+      <header className="app-header">
+        <h1>Lead Tracker</h1>
+        <p>Keep track of your sales leads and where each one stands.</p>
+      </header>
+
+      <section className="panel" aria-labelledby="leads-heading">
+        <div className="panel-header">
+          <div>
+            <h2 id="leads-heading">Leads</h2>
+            <p className="panel-summary" aria-live="polite">
+              {summary}
+            </p>
+          </div>
+          <div className="search">
+            <Search className="search-icon" size={16} aria-hidden="true" />
+            <input
+              type="search"
+              className="search-input"
+              placeholder="Search by name, email or phone"
+              aria-label="Search leads"
+              maxLength={100}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
         </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
+        {content}
       </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+    </main>
   )
 }
 
