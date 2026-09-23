@@ -23,6 +23,10 @@
   overflow: hidden;
 }
 
+.panel + .panel {
+  margin-top: 24px;
+}
+
 .panel-header {
   display: flex;
   flex-wrap: wrap;
@@ -71,13 +75,108 @@
   border-radius: 6px;
 }
 
-.search-input:focus {
+.search-input:focus,
+.field input:focus,
+.status-select select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
 }
 
+/* Create form: fields in a row on wide screens, stacked on narrow ones. */
+.lead-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: start;
+  gap: 16px;
+  padding: 20px;
+}
+
+@media (max-width: 760px) {
+  .lead-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.field input {
+  width: 100%;
+  padding: 8px 12px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.field input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.field-error {
+  color: var(--danger);
+  font-size: 0.8125rem;
+}
+
+.button-primary,
+.button-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.button-primary {
+  /* Lines the button up with the inputs, below their labels. */
+  margin-top: calc(0.875rem * 1.5 + 6px);
+  color: #fff;
+  background: var(--accent);
+  border: 1px solid transparent;
+}
+
+@media (max-width: 760px) {
+  .button-primary {
+    margin-top: 0;
+  }
+}
+
+.button-primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.button-primary:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.button-secondary {
+  padding: 4px 12px;
+  font-size: 0.875rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.button-secondary:hover {
+  background: var(--surface-muted);
+}
+
 .message {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 8px;
@@ -145,15 +244,45 @@
   font-weight: 600;
 }
 
-.status {
-  display: inline-block;
-  padding: 2px 10px;
+/* Status dropdown styled as a colored pill, with a chevron icon on top. */
+.status-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  color: var(--status-color);
+}
+
+.status-select select {
+  appearance: none;
+  padding: 2px 28px 2px 10px;
+  border: 1px solid transparent;
   border-radius: 999px;
   font-size: 0.8125rem;
   font-weight: 600;
-  text-transform: capitalize;
-  color: var(--status-color);
+  color: inherit;
   background: color-mix(in srgb, var(--status-color) 14%, transparent);
+  cursor: pointer;
+}
+
+.status-select select:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--status-color) 40%, transparent);
+}
+
+.status-select select:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* Native dropdown options use the normal text colors, not the pill's. */
+.status-select option {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.status-select svg {
+  position: absolute;
+  right: 10px;
+  pointer-events: none;
 }
 
 .status-new {

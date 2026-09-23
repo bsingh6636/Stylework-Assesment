@@ -1,12 +1,15 @@
-import type { Lead } from '../types.ts'
+import { ChevronDown } from 'lucide-react'
+import { useState, type ChangeEvent } from 'react'
+import { LEAD_STATUSES, STATUS_LABELS, type Lead, type LeadStatus } from '../types.ts'
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
 interface LeadTableProps {
   leads: Lead[]
+  onStatusChange: (lead: Lead, status: LeadStatus) => Promise<void>
 }
 
-function LeadTable({ leads }: LeadTableProps) {
+function LeadTable({ leads, onStatusChange }: LeadTableProps) {
   return (
     <div className="table-wrapper">
       <table className="lead-table">
@@ -30,7 +33,7 @@ function LeadTable({ leads }: LeadTableProps) {
                 <a href={`tel:${lead.phone.replace(/[^\d+]/g, '')}`}>{lead.phone}</a>
               </td>
               <td>
-                <span className={`status status-${lead.status}`}>{lead.status}</span>
+                <StatusSelect lead={lead} onChange={onStatusChange} />
               </td>
               <td>
                 <time dateTime={lead.createdAt}>{dateFormat.format(new Date(lead.createdAt))}</time>
@@ -40,6 +43,44 @@ function LeadTable({ leads }: LeadTableProps) {
         </tbody>
       </table>
     </div>
+  )
+}
+
+interface StatusSelectProps {
+  lead: Lead
+  onChange: (lead: Lead, status: LeadStatus) => Promise<void>
+}
+
+// The select always shows the saved status: it changes only once the API
+// confirms the update, and is disabled while the request is in flight.
+function StatusSelect({ lead, onChange }: StatusSelectProps) {
+  const [isSaving, setIsSaving] = useState(false)
+
+  async function handleChange(event: ChangeEvent<HTMLSelectElement>) {
+    setIsSaving(true)
+    try {
+      await onChange(lead, event.target.value as LeadStatus)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <span className={`status-select status-${lead.status}`}>
+      <select
+        value={lead.status}
+        onChange={handleChange}
+        disabled={isSaving}
+        aria-label={`Status for ${lead.name}`}
+      >
+        {LEAD_STATUSES.map((status) => (
+          <option key={status} value={status}>
+            {STATUS_LABELS[status]}
+          </option>
+        ))}
+      </select>
+      <ChevronDown size={14} aria-hidden="true" />
+    </span>
   )
 }
 

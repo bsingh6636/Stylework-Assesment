@@ -1,4 +1,4 @@
-import type { Lead } from './types.ts'
+import type { Lead, LeadStatus, NewLead } from './types.ts'
 
 const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000').replace(/\/+$/, '')
 
@@ -21,24 +21,45 @@ interface ErrorBody {
   details?: Record<string, string>
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+interface RequestOptions {
+  method?: 'GET' | 'POST' | 'PATCH'
+  body?: unknown
+  signal?: AbortSignal
+}
+
+async function request<T>(path: string, { method = 'GET', body, signal }: RequestOptions = {}): Promise<T> {
   let res: Response
   try {
-    res = await fetch(`${API_URL}${path}`, init)
+    res = await fetch(`${API_URL}${path}`, {
+      method,
+      signal,
+      // Only send a JSON content type when there is a body, so GET requests
+      // stay "simple" and skip the CORS preflight.
+      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
   } catch (err) {
-    if (init?.signal?.aborted) throw err
+    if (signal?.aborted) throw err
     throw new ApiError(0, 'Could not reach the server. Check that the API is running.')
   }
 
-  const body: unknown = await res.json().catch(() => null)
+  const data: unknown = await res.json().catch(() => null)
   if (!res.ok) {
-    const { error, details } = (body ?? {}) as ErrorBody
+    const { error, details } = (data ?? {}) as ErrorBody
     throw new ApiError(res.status, error ?? `Request failed with status ${res.status}`, details)
   }
-  return body as T
+  return data as T
 }
 
 export function listLeads(search: string, signal?: AbortSignal): Promise<Lead[]> {
   const query = search ? `?${new URLSearchParams({ search })}` : ''
   return request<Lead[]>(`/api/leads${query}`, { signal })
+}
+
+export function createLead(lead: NewLead): Promise<Lead> {
+  return request<Lead>('/api/leads', { method: 'POST', body: lead })
+}
+
+export function updateLeadStatus(id: number, status: LeadStatus): Promise<Lead> {
+  return request<Lead>(`/api/leads/${id}`, { method: 'PATCH', body: { status } })
 }
