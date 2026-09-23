@@ -1,0 +1,13 @@
+services:
+  api:
+    build: ./server
+    env_file: ./server/.env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      TRUST_PROXY: "1"
+    # Bound to localhost so the API is only reachable through nginx; with
+    # TRUST_PROXY=1 a direct client could otherwise forge X-Forwarded-For.
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
