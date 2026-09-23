@@ -53,6 +53,34 @@ npm run dev            # http://localhost:5173
 | `npm run test:watch` | Run tests in watch mode                         |
 | `npm run db:schema`  | Apply `db/schema.sql` to `DATABASE_URL`         |
 
+## API
+
+| Method  | Path                      | Body                       | Success                    |
+| ------- | ------------------------- | -------------------------- | -------------------------- |
+| `GET`   | `/api/health`             |                            | `200 {"status":"ok"}`      |
+| `GET`   | `/api/leads?search=term`  |                            | `200` leads, newest first  |
+| `POST`  | `/api/leads`              | `{ name, email, phone }`   | `201` created lead         |
+| `PATCH` | `/api/leads/:id`          | `{ status }`               | `200` updated lead         |
+
+`search` is optional and matches name, email or phone (case-insensitive). New leads start
+with status `new`; valid statuses are `new`, `contacted`, `qualified`, `converted`, `lost`.
+
+A lead looks like:
+
+```json
+{
+  "id": 1,
+  "name": "Asha Rao",
+  "email": "asha@example.com",
+  "phone": "+91 98765 43210",
+  "status": "new",
+  "createdAt": "2026-09-23T10:15:00.000Z"
+}
+```
+
+Errors return `{ "error": "message" }`, plus a `details` object with per-field messages on
+validation errors: `400` invalid input, `404` lead not found, `409` email already exists.
+
 ## Database
 
 The schema lives in [`server/db/schema.sql`](server/db/schema.sql): a single `leads` table with

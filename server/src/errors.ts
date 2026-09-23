@@ -2,13 +2,16 @@ import type { ErrorRequestHandler, RequestHandler } from 'express';
 
 // Throw this from route handlers for expected failures (400, 404, ...).
 // Express 5 forwards errors thrown in async handlers to errorHandler automatically.
+// `details` holds per-field messages for validation errors, e.g. { email: '...' }.
 export class HttpError extends Error {
   readonly status: number;
+  readonly details?: Record<string, string>;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, details?: Record<string, string>) {
     super(message);
     this.name = 'HttpError';
     this.status = status;
+    this.details = details;
   }
 }
 
@@ -23,7 +26,7 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, next) => {
   }
 
   if (err instanceof HttpError) {
-    res.status(err.status).json({ error: err.message });
+    res.status(err.status).json({ error: err.message, details: err.details });
     return;
   }
 
