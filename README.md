@@ -23,14 +23,14 @@ A small full-stack app for creating, listing, searching and updating the status 
 ```bash
 cd server
 npm install
-cp .env.example .env   # then edit DATABASE_URL (and CORS_ORIGIN if needed)
+cp .env.example .env   # then edit STYLE_WORK_DB_URL (and CORS_ORIGIN if needed)
 npm run db:schema      # create the leads table (safe to re-run)
 npm run dev            # http://localhost:3000
 ```
 
 Check it's running: <http://localhost:3000/api/health> should return `{"status":"ok"}`.
 
-The server connects to PostgreSQL on startup and exits with an error if `DATABASE_URL`
+The server connects to PostgreSQL on startup and exits with an error if `STYLE_WORK_DB_URL`
 is missing or the database is unreachable.
 
 ### 2. Frontend
@@ -54,7 +54,7 @@ copy `client/.env.example` to `client/.env.local` and set `VITE_API_URL`.
 | `npm run typecheck`  | Type-check all TypeScript without emitting      |
 | `npm test`           | Run the test suite once                         |
 | `npm run test:watch` | Run tests in watch mode                         |
-| `npm run db:schema`  | Apply `db/schema.sql` to `DATABASE_URL`         |
+| `npm run db:schema`  | Apply `db/schema.sql` to `STYLE_WORK_DB_URL`     |
 
 ## API
 
@@ -82,7 +82,25 @@ A lead looks like:
 ```
 
 Errors return `{ "error": "message" }`, plus a `details` object with per-field messages on
-validation errors: `400` invalid input, `404` lead not found, `409` email already exists.
+validation errors: `400` invalid input, `404` lead not found, `409` email already exists,
+`413` body over 10 kB, `429` rate limit exceeded.
+
+## Security
+
+- **SQL injection:** every query is parameterized (`$1`, `$2`, …); user input is never
+  concatenated into SQL. `LIKE` wildcards in search terms are escaped.
+- **Input validation:** all request bodies, ids and query strings are validated and
+  length-limited on the server; JSON bodies are capped at 10 kB.
+- **Rate limiting (per client IP):** 300 requests and 50 writes (`POST`/`PATCH`) per
+  15 minutes, applied globally. The health check is exempt so platform probes are never throttled.
+  `X-Forwarded-For` is only trusted when `TRUST_PROXY` is set, so clients can't spoof their
+  IP to reset their quota.
+- **HTTP hardening:** security headers via `helmet` (HSTS, `nosniff`, CSP, frame
+  protection); CORS limited to configured origins and the `GET`/`POST`/`PATCH` methods.
+- **Error handling:** unexpected errors are logged server-side and return a generic `500`,
+  never stack traces or database details.
+- **Database:** secrets live only in environment variables; row level security blocks
+  Supabase's public REST API from reading the table; connections time out after 5 s.
 
 ## Database
 
@@ -107,12 +125,13 @@ cd client && npm test
 | `tests/app.test.ts`                | Health check, JSON 404, malformed JSON                        | no               |
 | `tests/leads.routes.test.ts`       | Endpoint status codes and error mapping (repository mocked)   | no               |
 | `tests/leads.validation.test.ts`   | Email, phone, id and search validation rules                  | no               |
+| `tests/security.test.ts`           | Security headers, CORS, body size limit, per-IP rate limits, `X-Forwarded-For` spoofing | no |
 | `tests/leads.repository.test.ts`   | The real SQL: create, duplicates, search, ordering, updates   | yes              |
 
 The repository tests run only when `TEST_DATABASE_URL` is set, and are skipped otherwise.
 They create a temporary schema, apply `db/schema.sql` to it and drop it afterwards, so
-`TEST_DATABASE_URL` can safely be the same database as `DATABASE_URL`. Tests never use
-`DATABASE_URL` itself.
+`TEST_DATABASE_URL` can safely be the same database as `STYLE_WORK_DB_URL`. Tests never use
+`STYLE_WORK_DB_URL` itself.
 
 ### Frontend (`client/`)
 
@@ -130,10 +149,11 @@ server is needed.
 
 | Variable            | Required | Default                 | Description                                  |
 | ------------------- | -------- | ----------------------- | -------------------------------------------- |
-| `DATABASE_URL`      | yes      |                         | PostgreSQL connection string                 |
+| `STYLE_WORK_DB_URL` | yes      |                         | PostgreSQL connection string                 |
 | `PORT`              | no       | `3000`                  | Port the API listens on                      |
 | `CORS_ORIGIN`       | no       | `http://localhost:5173` | Comma-separated list of allowed origins      |
 | `TEST_DATABASE_URL` | no       |                         | Enables the PostgreSQL tests (see Tests)     |
+| `TRUST_PROXY`       | no       | unset                   | Number of reverse proxies in front of the API (`1` on Render) |
 
 ## Environment variables (`client/.env.local`)
 

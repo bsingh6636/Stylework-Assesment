@@ -4,7 +4,7 @@ import { pool } from './db.js';
 
 async function main() {
   if (!config.databaseUrl) {
-    throw new Error('DATABASE_URL is not set. Copy .env.example to .env and fill it in.');
+    throw new Error('STYLE_WORK_DB_URL is not set. Copy .env.example to .env and fill it in.');
   }
 
   // Fail fast if the database is unreachable.
