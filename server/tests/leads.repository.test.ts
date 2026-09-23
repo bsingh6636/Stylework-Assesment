@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { escapeIdentifier } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { pool } from '../src/db.js';
+import type { LeadFilters } from '../src/leads/lead.types.js';
 import {
   createLead,
   DuplicateEmailError,
@@ -29,6 +30,8 @@ vi.mock('../src/db.js', async () => {
   };
 });
 
+const allOnOnePage = { page: 1, limit: 100 };
+
 describe.skipIf(!process.env.TEST_DATABASE_URL)('leads repository (PostgreSQL)', () => {
   beforeAll(async () => {
     await pool.query(`CREATE SCHEMA ${schema}`);
@@ -51,7 +54,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)('leads repository (PostgreSQL)',
     await pool.end();
   });
 
-  it('creates a lead with status "new" and a creation time', async () => {
+  it('creates a lead with status "new" and matching creation and update times', async () => {
     const lead = await createLead({ name: 'Asha Rao', email: 'asha@example.com', phone: '9876543210' });
 
     expect(lead).toEqual({
@@ -61,6 +64,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)('leads repository (PostgreSQL)',
       phone: '9876543210',
       status: 'new',
       createdAt: expect.any(Date),
+      updatedAt: lead.createdAt,
     });
   });
 
@@ -79,26 +83,54 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)('leads repository (PostgreSQL)',
       await createLead({ name: 'Meera_Iyer', email: 'meera@mail.com', phone: '9123456789' });
     });
 
-    const namesFor = async (search?: string) => (await listLeads(search)).map((lead) => lead.name);
+    const namesFor = async (filters: LeadFilters = {}) =>
+      (await listLeads({ ...allOnOnePage, ...filters })).leads.map((lead) => lead.name);
 
     it('returns leads newest first', async () => {
       expect(await namesFor()).toEqual(['Meera_Iyer', 'Ravi 50% Off', 'Asha Rao']);
     });
 
     it('searches name, email and phone, ignoring case', async () => {
-      expect(await namesFor('ASHA')).toEqual(['Asha Rao']);
-      expect(await namesFor('shop.in')).toEqual(['Ravi 50% Off']);
-      expect(await namesFor('555 0000')).toEqual(['Ravi 50% Off']);
+      expect(await namesFor({ search: 'ASHA' })).toEqual(['Asha Rao']);
+      expect(await namesFor({ search: 'shop.in' })).toEqual(['Ravi 50% Off']);
+      expect(await namesFor({ search: '555 0000' })).toEqual(['Ravi 50% Off']);
     });
 
     it('treats LIKE wildcards in the search term literally', async () => {
-      expect(await namesFor('%')).toEqual(['Ravi 50% Off']);
-      expect(await namesFor('_')).toEqual(['Meera_Iyer']);
+      expect(await namesFor({ search: '%' })).toEqual(['Ravi 50% Off']);
+      expect(await namesFor({ search: '_' })).toEqual(['Meera_Iyer']);
     });
 
     it('returns an empty list when nothing matches', async () => {
-      expect(await namesFor('nobody')).toEqual([]);
-      expect(await namesFor("' OR 1=1 --")).toEqual([]);
+      expect(await namesFor({ search: 'nobody' })).toEqual([]);
+      expect(await namesFor({ search: "' OR 1=1 --" })).toEqual([]);
+    });
+
+    it('filters by status, alone or combined with a search term', async () => {
+      const [meera, ravi] = (await listLeads(allOnOnePage)).leads;
+      await updateLeadStatus(meera!.id, 'qualified');
+      await updateLeadStatus(ravi!.id, 'qualified');
+
+      expect(await namesFor({ status: 'qualified' })).toEqual(['Meera_Iyer', 'Ravi 50% Off']);
+      expect(await namesFor({ status: 'new' })).toEqual(['Asha Rao']);
+      expect(await namesFor({ status: 'qualified', search: 'ravi' })).toEqual(['Ravi 50% Off']);
+      expect(await namesFor({ status: 'lost' })).toEqual([]);
+    });
+
+    it('pages through the leads newest first and reports the total', async () => {
+      expect(await listLeads({ page: 1, limit: 2 })).toMatchObject({
+        total: 3,
+        leads: [{ name: 'Meera_Iyer' }, { name: 'Ravi 50% Off' }],
+      });
+      expect(await listLeads({ page: 2, limit: 2 })).toMatchObject({
+        total: 3,
+        leads: [{ name: 'Asha Rao' }],
+      });
+    });
+
+    it('counts only the filtered leads, even past the last page', async () => {
+      expect(await listLeads({ search: 'ravi', page: 1, limit: 2 })).toMatchObject({ total: 1 });
+      expect(await listLeads({ search: 'ravi', page: 5, limit: 2 })).toEqual({ leads: [], total: 1 });
     });
   });
 
@@ -109,7 +141,36 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)('leads repository (PostgreSQL)',
       const updated = await updateLeadStatus(id, 'qualified');
 
       expect(updated).toMatchObject({ id, status: 'qualified' });
-      expect((await listLeads())[0]?.status).toBe('qualified');
+      expect((await listLeads(allOnOnePage)).leads[0]?.status).toBe('qualified');
+    });
+
+    const longAgo = new Date('2020-01-01T00:00:00.000Z');
+
+    async function insertOldLead(): Promise<number> {
+      const { rows } = await pool.query<{ id: number }>(
+        `INSERT INTO leads (name, email, phone, created_at, updated_at)
+         VALUES ('Asha Rao', 'asha@example.com', '9876543210', $1, $1)
+         RETURNING id`,
+        [longAgo],
+      );
+      return rows[0]!.id;
+    }
+
+    it('bumps updated_at but not created_at', async () => {
+      const id = await insertOldLead();
+
+      const updated = await updateLeadStatus(id, 'contacted');
+
+      expect(updated?.createdAt).toEqual(longAgo);
+      expect(updated?.updatedAt.getTime()).toBeGreaterThan(longAgo.getTime());
+    });
+
+    it('leaves updated_at alone when the status does not change', async () => {
+      const id = await insertOldLead();
+
+      const updated = await updateLeadStatus(id, 'new');
+
+      expect(updated?.updatedAt).toEqual(longAgo);
     });
 
     it('returns null for an unknown id', async () => {

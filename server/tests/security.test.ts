@@ -19,8 +19,9 @@ async function repeat(times: number, send: (i: number) => PromiseLike<unknown>) 
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(listLeads).mockResolvedValue([]);
-  vi.mocked(createLead).mockResolvedValue({ id: 1, ...newLead, status: 'new', createdAt: new Date() });
+  vi.mocked(listLeads).mockResolvedValue({ leads: [], total: 0 });
+  const now = new Date();
+  vi.mocked(createLead).mockResolvedValue({ id: 1, ...newLead, status: 'new', createdAt: now, updatedAt: now });
 });
 
 afterEach(() => {

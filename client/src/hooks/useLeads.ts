@@ -1,43 +1,50 @@
 import { useEffect, useState } from 'react'
 import { listLeads } from '../api.ts'
-import type { Lead } from '../types.ts'
+import type { Lead, LeadQuery } from '../types.ts'
 
 interface LeadsResult {
-  search: string
-  version: number
+  requestKey: string
   leads: Lead[]
+  total: number
   error: string | null
 }
 
-export function useLeads(search: string) {
+export function useLeads({ search, status, page, limit }: LeadQuery) {
   const [result, setResult] = useState<LeadsResult | null>(null)
   const [version, setVersion] = useState(0)
+  const requestKey = JSON.stringify([search, status, page, limit, version])
 
   useEffect(() => {
-    // Aborted when the search changes, so a slow response can't overwrite a newer one.
+    // Aborted when the query changes, so a slow response can't overwrite a newer one.
     const controller = new AbortController()
 
-    listLeads(search, controller.signal)
-      .then((leads) => {
-        if (!controller.signal.aborted) setResult({ search, version, leads, error: null })
+    listLeads({ search, status, page, limit }, controller.signal)
+      .then(({ leads, total }) => {
+        if (!controller.signal.aborted) setResult({ requestKey, leads, total, error: null })
       })
       .catch((err: unknown) => {
         if (controller.signal.aborted) return
         const message = err instanceof Error ? err.message : 'Something went wrong'
-        setResult({ search, version, leads: [], error: message })
+        setResult({ requestKey, leads: [], total: 0, error: message })
       })
 
     return () => controller.abort()
-  }, [search, version])
+  }, [requestKey, search, status, page, limit])
+
+  const reload = () => setVersion((v) => v + 1)
 
   return {
     leads: result?.leads ?? [],
+    total: result?.total ?? 0,
     error: result?.error ?? null,
-    isLoading: result?.search !== search || result.version !== version,
-    reload: () => setVersion((v) => v + 1),
-    replaceLead: (lead: Lead) =>
-      setResult((current) =>
-        current && { ...current, leads: current.leads.map((l) => (l.id === lead.id ? lead : l)) },
-      ),
+    isLoading: result?.requestKey !== requestKey,
+    reload,
+    replaceLead: (lead: Lead) => {
+      setResult(
+        (current) => current && { ...current, leads: current.leads.map((l) => (l.id === lead.id ? lead : l)) },
+      )
+      // It no longer matches the filter: refetch so the page refills and the total drops.
+      if (status && lead.status !== status) reload()
+    },
   }
 }

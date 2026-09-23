@@ -41,8 +41,9 @@ npm install
 npm run dev            # http://localhost:5173
 ```
 
-The frontend calls the API at `http://localhost:3000` by default. To use a different URL,
-copy `client/.env.example` to `client/.env.local` and set `VITE_API_URL`.
+In development the frontend calls the API at `http://localhost:3000`; production builds call
+`/api` on their own origin (a reverse proxy forwards it to the server). To use a different URL,
+copy `client/.env.example` to `client/.env.local` and set `VITE_STYLE_WORK_API_URL`.
 
 ## Backend scripts (`server/`)
 
@@ -58,15 +59,33 @@ copy `client/.env.example` to `client/.env.local` and set `VITE_API_URL`.
 
 ## API
 
-| Method  | Path                      | Body                       | Success                    |
-| ------- | ------------------------- | -------------------------- | -------------------------- |
-| `GET`   | `/api/health`             |                            | `200 {"status":"ok"}`      |
-| `GET`   | `/api/leads?search=term`  |                            | `200` leads, newest first  |
-| `POST`  | `/api/leads`              | `{ name, email, phone }`   | `201` created lead         |
-| `PATCH` | `/api/leads/:id`          | `{ status }`               | `200` updated lead         |
+| Method  | Path                                                  | Body                     | Success                          |
+| ------- | ----------------------------------------------------- | ------------------------ | -------------------------------- |
+| `GET`   | `/api/health`                                         |                          | `200 {"status":"ok"}`            |
+| `GET`   | `/api/leads?search=term&status=new&page=1&limit=20`   |                          | `200` a page of leads, newest first |
+| `POST`  | `/api/leads`                                          | `{ name, email, phone }` | `201` created lead               |
+| `PATCH` | `/api/leads/:id`                                      | `{ status }`             | `200` updated lead               |
 
-`search` is optional and matches name, email or phone (case-insensitive). New leads start
-with status `new`; valid statuses are `new`, `contacted`, `qualified`, `converted`, `lost`.
+All `GET /api/leads` parameters are optional and can be combined:
+
+| Parameter | Default | Description                                                  |
+| --------- | ------- | ------------------------------------------------------------ |
+| `search`  |         | Matches name, email or phone (case-insensitive), max 100 chars |
+| `status`  |         | Only leads with this status                                  |
+| `page`    | `1`     | 1-based page number                                          |
+| `limit`   | `20`    | Leads per page, 1–100                                        |
+
+It returns the page plus the total number of matching leads, so clients can render page
+links: `{ "leads": [...], "total": 57, "page": 1, "limit": 20 }`. A page past the end returns
+an empty `leads` array with the real `total`.
+
+Pagination uses `LIMIT`/`OFFSET`, so any page number can be linked directly. The trade-off:
+deep pages get slower, and a lead added between two page loads shifts the rest by one.
+Keyset (cursor) pagination avoids both, but it can't jump to page N, so it would suit
+infinite scroll better than numbered pages.
+
+New leads start with status `new`; valid statuses are `new`, `contacted`, `qualified`,
+`converted`, `lost`.
 
 A lead looks like:
 
@@ -77,13 +96,26 @@ A lead looks like:
   "email": "asha@example.com",
   "phone": "+91 98765 43210",
   "status": "new",
-  "createdAt": "2026-09-23T10:15:00.000Z"
+  "createdAt": "2026-09-23T10:15:00.000Z",
+  "updatedAt": "2026-09-23T10:15:00.000Z"
 }
 ```
 
 Errors return `{ "error": "message" }`, plus a `details` object with per-field messages on
 validation errors: `400` invalid input, `404` lead not found, `409` email already exists,
 `413` body over 10 kB, `429` rate limit exceeded.
+
+## Frontend behaviour
+
+- The search term, status filter, page and page size live in the URL
+  (`?search=asha&status=new&page=2&limit=50`), so a reload or a shared link shows the same
+  view. The URL is updated with `history.replaceState`, so paging doesn't fill the back
+  button's history. Invalid values in a hand-edited link fall back to the defaults.
+- Changing the search, filter or page size goes back to page 1. A link to a page past the end
+  (or removing the last lead on the last page) moves to the last page that exists.
+- Adding a lead jumps to page 1, where it appears as the newest lead.
+- Status changes update the row in place. When a status filter is active and the lead no
+  longer matches it, the page is refetched so it refills from the next page.
 
 ## Security
 
@@ -106,8 +138,12 @@ validation errors: `400` invalid input, `404` lead not found, `409` email alread
 
 The schema lives in [`server/db/schema.sql`](server/db/schema.sql): a single `leads` table with
 an identity primary key, non-blank `name`/`email`/`phone`, a `status` limited by a CHECK
-constraint (default `new`), a `created_at` timestamp, and a case-insensitive unique index on
-email. Apply it with `npm run db:schema`, or paste it into the Supabase SQL Editor.
+constraint (default `new`), `created_at`/`updated_at` timestamps, and a case-insensitive unique
+index on email. A `(status, created_at DESC)` index serves the status filter together with the
+newest-first sort. A `BEFORE UPDATE` trigger sets `updated_at` whenever a row actually changes,
+so it stays accurate even for updates made outside the API (e.g. in the Supabase dashboard).
+Apply it with `npm run db:schema`, or paste it into the Supabase SQL Editor. Re-running it
+upgrades an existing table in place: `updated_at` is added and backfilled from `created_at`.
 
 ## Tests
 
@@ -124,9 +160,9 @@ cd client && npm test
 | ---------------------------------- | ------------------------------------------------------------- | ---------------- |
 | `tests/app.test.ts`                | Health check, JSON 404, malformed JSON                        | no               |
 | `tests/leads.routes.test.ts`       | Endpoint status codes and error mapping (repository mocked)   | no               |
-| `tests/leads.validation.test.ts`   | Email, phone, id and search validation rules                  | no               |
+| `tests/leads.validation.test.ts`   | Email, phone, id, search, status filter, page and limit validation rules | no     |
 | `tests/security.test.ts`           | Security headers, CORS, body size limit, per-IP rate limits, `X-Forwarded-For` spoofing | no |
-| `tests/leads.repository.test.ts`   | The real SQL: create, duplicates, search, ordering, updates   | yes              |
+| `tests/leads.repository.test.ts`   | The real SQL: create, duplicates, search, status filter, pagination and totals, ordering, updates and the `updated_at` trigger | yes |
 
 The repository tests run only when `TEST_DATABASE_URL` is set, and are skipped otherwise.
 They create a temporary schema, apply `db/schema.sql` to it and drop it afterwards, so
@@ -141,9 +177,11 @@ server is needed.
 | File                                   | Covers                                                           |
 | -------------------------------------- | ---------------------------------------------------------------- |
 | `src/api.test.ts`                      | Request URLs, methods, JSON bodies and error handling            |
+| `src/leadQuery.test.ts`                | Reading and writing the URL query, fallbacks for invalid values  |
+| `src/components/Pagination.test.tsx`   | Page links with gaps, disabled previous/next, page size changes  |
 | `src/components/LeadForm.test.tsx`     | Create flow, per-field server errors, duplicate email, toasts    |
-| `src/components/LeadTable.test.tsx`    | Rows and links, status changes, disabled select while saving     |
-| `src/App.test.tsx`                     | Loading, debounced search, empty/error states, status updates    |
+| `src/components/LeadTable.test.tsx`    | Rows, links and timestamps, status changes, disabled select while saving |
+| `src/App.test.tsx`                     | Loading, debounced search, status filter, pagination and URL state, empty/error states, status updates, "Add a lead" accordion |
 
 ## Environment variables (`server/.env`)
 
@@ -157,6 +195,6 @@ server is needed.
 
 ## Environment variables (`client/.env.local`)
 
-| Variable       | Required | Default                 | Description                                        |
-| -------------- | -------- | ----------------------- | -------------------------------------------------- |
-| `VITE_API_URL` | no       | `http://localhost:3000` | API base URL (public: it's built into the JS bundle) |
+| Variable                  | Required | Default                                          | Description                                        |
+| ------------------------- | -------- | ------------------------------------------------ | -------------------------------------------------- |
+| `VITE_STYLE_WORK_API_URL` | no       | `http://localhost:3000` in dev, same origin in production | API base URL (public: it's built into the JS bundle) |

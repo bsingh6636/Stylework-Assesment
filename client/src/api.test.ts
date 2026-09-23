@@ -25,24 +25,27 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('listLeads', () => {
-  it('requests all leads when there is no search term', async () => {
-    fetchMock.mockResolvedValue(jsonResponse([asha]))
+const firstPage = { search: '', page: 1, limit: 20 }
 
-    await expect(listLeads('')).resolves.toEqual([asha])
+describe('listLeads', () => {
+  it('requests a page of leads without extra headers', async () => {
+    const body = { leads: [asha], total: 1, page: 1, limit: 20 }
+    fetchMock.mockResolvedValue(jsonResponse(body))
+
+    await expect(listLeads(firstPage)).resolves.toEqual(body)
 
     const { url, init } = lastRequest()
-    expect(url).toMatch(/\/api\/leads$/)
+    expect(url).toMatch(/\/api\/leads\?page=1&limit=20$/)
     expect(init.method).toBe('GET')
     expect(init.headers).toBeUndefined()
   })
 
-  it('URL-encodes the search term', async () => {
-    fetchMock.mockResolvedValue(jsonResponse([]))
+  it('adds the URL-encoded search term and the status filter', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ leads: [], total: 0, page: 3, limit: 50 }))
 
-    await listLeads('a&b c')
+    await listLeads({ search: 'a&b c', status: 'lost', page: 3, limit: 50 })
 
-    expect(lastRequest().url).toMatch(/\/api\/leads\?search=a%26b\+c$/)
+    expect(lastRequest().url).toMatch(/\/api\/leads\?page=3&limit=50&search=a%26b\+c&status=lost$/)
   })
 })
 
@@ -93,13 +96,13 @@ describe('errors', () => {
   it('falls back to the status code when the body is not JSON', async () => {
     fetchMock.mockResolvedValue(new Response('Bad Gateway', { status: 502 }))
 
-    await expect(listLeads('')).rejects.toThrow('Request failed with status 502')
+    await expect(listLeads(firstPage)).rejects.toThrow('Request failed with status 502')
   })
 
   it('explains when the server cannot be reached', async () => {
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
 
-    await expect(listLeads('')).rejects.toMatchObject({
+    await expect(listLeads(firstPage)).rejects.toMatchObject({
       status: 0,
       message: 'Could not reach the server. Check that the API is running.',
     })

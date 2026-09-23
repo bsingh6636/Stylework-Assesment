@@ -7,6 +7,7 @@ export const asha: Lead = {
   phone: '+91 98765 43210',
   status: 'new',
   createdAt: '2026-09-23T10:15:00.000Z',
+  updatedAt: '2026-09-23T10:15:00.000Z',
 }
 
 export const ravi: Lead = {
@@ -16,4 +17,5 @@ export const ravi: Lead = {
   phone: '(022) 555 0000',
   status: 'contacted',
   createdAt: '2026-09-22T09:00:00.000Z',
+  updatedAt: '2026-09-23T08:30:00.000Z',
 }

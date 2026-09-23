@@ -23,8 +23,9 @@ const lead: Lead = {
   phone: '+91 98765 43210',
   status: 'new',
   createdAt: new Date('2026-09-23T10:15:00.000Z'),
+  updatedAt: new Date('2026-09-23T11:00:00.000Z'),
 };
-const leadJson = { ...lead, createdAt: '2026-09-23T10:15:00.000Z' };
+const leadJson = { ...lead, createdAt: '2026-09-23T10:15:00.000Z', updatedAt: '2026-09-23T11:00:00.000Z' };
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -34,36 +35,71 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const firstPage = { page: 1, limit: 20 };
+
 describe('GET /api/leads', () => {
-  it('returns all leads', async () => {
-    vi.mocked(listLeads).mockResolvedValue([lead]);
+  it('returns the first page of leads with the total', async () => {
+    vi.mocked(listLeads).mockResolvedValue({ leads: [lead], total: 1 });
 
     const res = await request(app).get('/api/leads');
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual([leadJson]);
-    expect(listLeads).toHaveBeenCalledWith(undefined);
+    expect(res.body).toEqual({ leads: [leadJson], total: 1, page: 1, limit: 20 });
+    expect(listLeads).toHaveBeenCalledWith({ search: undefined, status: undefined, ...firstPage });
   });
 
   it('passes a trimmed search term to the repository', async () => {
-    vi.mocked(listLeads).mockResolvedValue([]);
+    vi.mocked(listLeads).mockResolvedValue({ leads: [], total: 0 });
 
     const res = await request(app).get('/api/leads').query({ search: '  asha ' });
 
     expect(res.status).toBe(200);
-    expect(listLeads).toHaveBeenCalledWith('asha');
+    expect(listLeads).toHaveBeenCalledWith({ search: 'asha', status: undefined, ...firstPage });
   });
 
   it('treats a blank search as no search', async () => {
-    vi.mocked(listLeads).mockResolvedValue([]);
+    vi.mocked(listLeads).mockResolvedValue({ leads: [], total: 0 });
 
     await request(app).get('/api/leads').query({ search: '   ' });
 
-    expect(listLeads).toHaveBeenCalledWith(undefined);
+    expect(listLeads).toHaveBeenCalledWith({ search: undefined, status: undefined, ...firstPage });
   });
 
-  it('rejects a repeated search parameter', async () => {
-    const res = await request(app).get('/api/leads?search=a&search=b');
+  it('filters by status, alone or with a search term', async () => {
+    vi.mocked(listLeads).mockResolvedValue({ leads: [], total: 0 });
+
+    await request(app).get('/api/leads').query({ status: 'qualified' });
+    expect(listLeads).toHaveBeenLastCalledWith({ search: undefined, status: 'qualified', ...firstPage });
+
+    await request(app).get('/api/leads').query({ search: 'asha', status: 'lost' });
+    expect(listLeads).toHaveBeenLastCalledWith({ search: 'asha', status: 'lost', ...firstPage });
+  });
+
+  it('returns the requested page and page size', async () => {
+    vi.mocked(listLeads).mockResolvedValue({ leads: [lead], total: 51 });
+
+    const res = await request(app).get('/api/leads').query({ page: '3', limit: '25', status: 'new' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ leads: [leadJson], total: 51, page: 3, limit: 25 });
+    expect(listLeads).toHaveBeenCalledWith({ search: undefined, status: 'new', page: 3, limit: 25 });
+  });
+
+  it.each([
+    'search=a&search=b',
+    'status=archived',
+    'status=NEW',
+    'status=new&status=lost',
+    'page=0',
+    'page=-1',
+    'page=1.5',
+    'page=abc',
+    'page=2147483648',
+    'limit=0',
+    'limit=101',
+    'limit=1&limit=2',
+  ])('rejects ?%s', async (query) => {
+    const res = await request(app).get(`/api/leads?${query}`);
 
     expect(res.status).toBe(400);
     expect(listLeads).not.toHaveBeenCalled();

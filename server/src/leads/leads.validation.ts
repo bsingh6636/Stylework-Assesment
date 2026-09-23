@@ -6,6 +6,11 @@ const MAX_EMAIL_LENGTH = 254;
 const MAX_SEARCH_LENGTH = 100;
 const MAX_POSTGRES_INTEGER = 2_147_483_647;
 
+export const DEFAULT_PAGE_SIZE = 20;
+export const MAX_PAGE_SIZE = 100;
+
+const INVALID_STATUS_MESSAGE = `Status must be one of: ${LEAD_STATUSES.join(', ')}`;
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\+?[\d\s\-().]+$/;
 
@@ -19,6 +24,11 @@ function isLeadStatus(value: unknown): value is LeadStatus {
 
 function trimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function toPositiveInteger(value: unknown, max: number): number | null {
+  const number = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : NaN;
+  return Number.isInteger(number) && number >= 1 && number <= max ? number : null;
 }
 
 export function parseCreateLeadInput(body: unknown): CreateLeadInput {
@@ -62,19 +72,50 @@ export function parseLeadStatus(body: unknown): LeadStatus {
     throw new HttpError(400, 'Request body must be a JSON object');
   }
   if (!isLeadStatus(body.status)) {
-    throw new HttpError(400, 'Validation failed', {
-      status: `Status must be one of: ${LEAD_STATUSES.join(', ')}`,
-    });
+    throw new HttpError(400, 'Validation failed', { status: INVALID_STATUS_MESSAGE });
   }
   return body.status;
 }
 
+export function parseStatusFilter(value: unknown): LeadStatus | undefined {
+  if (value === undefined || value === '') {
+    return undefined;
+  }
+  if (!isLeadStatus(value)) {
+    throw new HttpError(400, INVALID_STATUS_MESSAGE);
+  }
+  return value;
+}
+
 export function parseLeadId(value: string): number {
-  const id = /^\d+$/.test(value) ? Number(value) : NaN;
-  if (!Number.isInteger(id) || id < 1 || id > MAX_POSTGRES_INTEGER) {
+  const id = toPositiveInteger(value, MAX_POSTGRES_INTEGER);
+  if (id === null) {
     throw new HttpError(400, 'Lead id must be a positive integer');
   }
   return id;
+}
+
+// Capped so that the offset, (page - 1) * limit, stays a safe integer.
+export function parsePage(value: unknown): number {
+  if (value === undefined || value === '') {
+    return 1;
+  }
+  const page = toPositiveInteger(value, MAX_POSTGRES_INTEGER);
+  if (page === null) {
+    throw new HttpError(400, 'page must be a positive integer');
+  }
+  return page;
+}
+
+export function parseLimit(value: unknown): number {
+  if (value === undefined || value === '') {
+    return DEFAULT_PAGE_SIZE;
+  }
+  const limit = toPositiveInteger(value, MAX_PAGE_SIZE);
+  if (limit === null) {
+    throw new HttpError(400, `limit must be an integer from 1 to ${MAX_PAGE_SIZE}`);
+  }
+  return limit;
 }
 
 export function parseSearch(value: unknown): string | undefined {

@@ -1,6 +1,8 @@
-import type { Lead, LeadStatus, NewLead } from './types.ts'
+import type { Lead, LeadPage, LeadQuery, LeadStatus, NewLead } from './types.ts'
 
-const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000').replace(/\/+$/, '')
+const API_URL = (
+  import.meta.env.VITE_STYLE_WORK_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:3000')
+).replace(/\/+$/, '')
 
 export class ApiError extends Error {
   readonly status: number
@@ -48,9 +50,11 @@ async function request<T>(path: string, { method = 'GET', body, signal }: Reques
   return data as T
 }
 
-export function listLeads(search: string, signal?: AbortSignal): Promise<Lead[]> {
-  const query = search ? `?${new URLSearchParams({ search })}` : ''
-  return request<Lead[]>(`/api/leads${query}`, { signal })
+export function listLeads({ search, status, page, limit }: LeadQuery, signal?: AbortSignal): Promise<LeadPage> {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) })
+  if (search) params.set('search', search)
+  if (status) params.set('status', status)
+  return request<LeadPage>(`/api/leads?${params}`, { signal })
 }
 
 export function createLead(lead: NewLead): Promise<Lead> {

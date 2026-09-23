@@ -5,7 +5,7 @@ import { asha, ravi } from '../test/fixtures.ts'
 import LeadTable from './LeadTable.tsx'
 
 describe('LeadTable', () => {
-  it('shows one row per lead with contact links', () => {
+  it('shows one row per lead with contact links and timestamps', () => {
     render(<LeadTable leads={[asha, ravi]} onStatusChange={vi.fn()} />)
 
     const rows = screen.getAllByRole('row').slice(1) // skip the header row
@@ -16,10 +16,9 @@ describe('LeadTable', () => {
     expect(first.getByRole('link', { name: asha.email })).toHaveAttribute('href', 'mailto:asha@example.com')
     expect(first.getByRole('link', { name: asha.phone })).toHaveAttribute('href', 'tel:+919876543210')
     expect(first.getByRole('combobox', { name: 'Status for Asha Rao' })).toHaveValue('new')
-    expect(first.getByText((_, element) => element?.tagName === 'TIME')).toHaveAttribute(
-      'datetime',
-      asha.createdAt,
-    )
+
+    const times = within(rows[1]!).getAllByText((_, element) => element?.tagName === 'TIME')
+    expect(times.map((time) => time.getAttribute('datetime'))).toEqual([ravi.createdAt, ravi.updatedAt])
   })
 
   it('passes the chosen status to onStatusChange', async () => {

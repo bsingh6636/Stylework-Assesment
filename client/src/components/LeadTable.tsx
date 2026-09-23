@@ -20,6 +20,7 @@ function LeadTable({ leads, onStatusChange }: LeadTableProps) {
             <th scope="col">Phone</th>
             <th scope="col">Status</th>
             <th scope="col">Created</th>
+            <th scope="col">Updated</th>
           </tr>
         </thead>
         <tbody>
@@ -36,7 +37,10 @@ function LeadTable({ leads, onStatusChange }: LeadTableProps) {
                 <StatusSelect lead={lead} onChange={onStatusChange} />
               </td>
               <td>
-                <time dateTime={lead.createdAt}>{dateFormat.format(new Date(lead.createdAt))}</time>
+                <Timestamp value={lead.createdAt} />
+              </td>
+              <td>
+                <Timestamp value={lead.updatedAt} />
               </td>
             </tr>
           ))}
@@ -44,6 +48,10 @@ function LeadTable({ leads, onStatusChange }: LeadTableProps) {
       </table>
     </div>
   )
+}
+
+function Timestamp({ value }: { value: string }) {
+  return <time dateTime={value}>{dateFormat.format(new Date(value))}</time>
 }
 
 interface StatusSelectProps {

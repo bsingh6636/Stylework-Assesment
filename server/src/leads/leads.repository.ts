@@ -1,6 +1,8 @@
 import { DatabaseError } from 'pg';
 import { pool } from '../db.js';
-import type { CreateLeadInput, Lead, LeadStatus } from './lead.types.js';
+import type { CreateLeadInput, Lead, LeadListQuery, LeadStatus } from './lead.types.js';
+
+const LEAD_COLUMNS = 'id, name, email, phone, status, created_at, updated_at';
 
 interface LeadRow {
   id: number;
@@ -9,6 +11,7 @@ interface LeadRow {
   phone: string;
   status: LeadStatus;
   created_at: Date;
+  updated_at: Date;
 }
 
 export class DuplicateEmailError extends Error {
@@ -26,6 +29,7 @@ function toLead(row: LeadRow): Lead {
     phone: row.phone,
     status: row.status,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -34,21 +38,35 @@ function escapeLikePattern(value: string): string {
   return value.replace(/[\\%_]/g, (char) => `\\${char}`);
 }
 
-export async function listLeads(search?: string): Promise<Lead[]> {
+const LIST_FILTER = `($1::text IS NULL OR name ILIKE $1 OR email ILIKE $1 OR phone ILIKE $1)
+    AND ($2::text IS NULL OR status = $2)`;
+
+export async function listLeads({
+  search,
+  status,
+  page,
+  limit,
+}: LeadListQuery): Promise<{ leads: Lead[]; total: number }> {
   const term = search?.trim();
   const pattern = term ? `%${escapeLikePattern(term)}%` : null;
+  const filterParams = [pattern, status ?? null];
 
-  const { rows } = await pool.query<LeadRow>(
-    `SELECT id, name, email, phone, status, created_at
-       FROM leads
-      WHERE $1::text IS NULL
-         OR name ILIKE $1
-         OR email ILIKE $1
-         OR phone ILIKE $1
-      ORDER BY created_at DESC, id DESC`,
-    [pattern],
-  );
-  return rows.map(toLead);
+  // Separate queries so the total is still known when the page is past the end.
+  const [pageResult, countResult] = await Promise.all([
+    pool.query<LeadRow>(
+      `SELECT ${LEAD_COLUMNS}
+         FROM leads
+        WHERE ${LIST_FILTER}
+        ORDER BY created_at DESC, id DESC
+        LIMIT $3 OFFSET $4`,
+      [...filterParams, limit, (page - 1) * limit],
+    ),
+    pool.query<{ total: number }>(
+      `SELECT count(*)::int AS total FROM leads WHERE ${LIST_FILTER}`,
+      filterParams,
+    ),
+  ]);
+  return { leads: pageResult.rows.map(toLead), total: countResult.rows[0]!.total };
 }
 
 export async function createLead(input: CreateLeadInput): Promise<Lead> {
@@ -56,7 +74,7 @@ export async function createLead(input: CreateLeadInput): Promise<Lead> {
     const { rows } = await pool.query<LeadRow>(
       `INSERT INTO leads (name, email, phone)
        VALUES ($1, $2, $3)
-       RETURNING id, name, email, phone, status, created_at`,
+       RETURNING ${LEAD_COLUMNS}`,
       [input.name, input.email, input.phone],
     );
     return toLead(rows[0]!);
@@ -73,7 +91,7 @@ export async function updateLeadStatus(id: number, status: LeadStatus): Promise<
     `UPDATE leads
         SET status = $2
       WHERE id = $1
-      RETURNING id, name, email, phone, status, created_at`,
+      RETURNING ${LEAD_COLUMNS}`,
     [id, status],
   );
   const row = rows[0];

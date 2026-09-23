@@ -1,13 +1,28 @@
 import { Router } from 'express';
 import { HttpError } from '../errors.js';
 import { createLead, DuplicateEmailError, listLeads, updateLeadStatus } from './leads.repository.js';
-import { parseCreateLeadInput, parseLeadId, parseLeadStatus, parseSearch } from './leads.validation.js';
+import {
+  parseCreateLeadInput,
+  parseLeadId,
+  parseLeadStatus,
+  parseLimit,
+  parsePage,
+  parseSearch,
+  parseStatusFilter,
+} from './leads.validation.js';
 
 export const leadsRouter = Router();
 
 leadsRouter.get('/', async (req, res) => {
-  const leads = await listLeads(parseSearch(req.query.search));
-  res.json(leads);
+  const page = parsePage(req.query.page);
+  const limit = parseLimit(req.query.limit);
+  const { leads, total } = await listLeads({
+    search: parseSearch(req.query.search),
+    status: parseStatusFilter(req.query.status),
+    page,
+    limit,
+  });
+  res.json({ leads, total, page, limit });
 });
 
 leadsRouter.post('/', async (req, res) => {

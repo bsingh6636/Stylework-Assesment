@@ -1,22 +1,40 @@
-import { CircleAlert, Inbox, LoaderCircle, RotateCw, Search, SearchX } from 'lucide-react'
+import { ChevronDown, CircleAlert, Inbox, LoaderCircle, RotateCw, Search, SearchX, UserPlus } from 'lucide-react'
 import { useState } from 'react'
 import { toast, Toaster } from 'sonner'
 import { updateLeadStatus } from './api.ts'
 import LeadForm from './components/LeadForm.tsx'
 import LeadTable from './components/LeadTable.tsx'
-import { useDebouncedValue } from './hooks/useDebouncedValue.ts'
+import Pagination from './components/Pagination.tsx'
+import { useLeadQuery } from './hooks/useLeadQuery.ts'
 import { useLeads } from './hooks/useLeads.ts'
-import { STATUS_LABELS, type Lead, type LeadStatus } from './types.ts'
+import { LEAD_STATUSES, STATUS_LABELS, type Lead, type LeadStatus } from './types.ts'
 import './App.css'
 
-function App() {
-  const [search, setSearch] = useState('')
-  const debouncedSearch = useDebouncedValue(search.trim(), 300)
-  const { leads, error, isLoading, reload, replaceLead } = useLeads(debouncedSearch)
+function noMatchesMessage(search: string, status?: LeadStatus) {
+  const leads = status ? `${STATUS_LABELS[status].toLowerCase()} leads` : 'leads'
+  return search ? `No ${leads} match “${search}”.` : `No ${leads}.`
+}
 
-  async function handleStatusChange(lead: Lead, status: LeadStatus) {
+function App() {
+  const [isFormOpen, setIsFormOpen] = useState(false)
+  const { query, searchInput, setSearchInput, setStatus, setLimit, setPage } = useLeadQuery()
+  const { leads, total, error, isLoading, reload, replaceLead } = useLeads(query)
+  const { search, status } = query
+
+  // A shared link or the last lead leaving a filter can point past the end.
+  const totalPages = Math.max(1, Math.ceil(total / query.limit))
+  if (!isLoading && !error && query.page > totalPages) {
+    setPage(totalPages)
+  }
+
+  function handleCreated() {
+    setPage(1)
+    reload()
+  }
+
+  async function handleStatusChange(lead: Lead, nextStatus: LeadStatus) {
     try {
-      const updated = await updateLeadStatus(lead.id, status)
+      const updated = await updateLeadStatus(lead.id, nextStatus)
       replaceLead(updated)
       toast.success(`${updated.name} is now ${STATUS_LABELS[updated.status]}`)
     } catch (err) {
@@ -44,19 +62,31 @@ function App() {
       </p>
     )
   } else if (leads.length === 0) {
-    content = debouncedSearch ? (
-      <p className="message">
-        <SearchX size={20} aria-hidden="true" />
-        No leads match “{debouncedSearch}”.
-      </p>
-    ) : (
-      <p className="message">
-        <Inbox size={20} aria-hidden="true" />
-        No leads yet. Add your first one above.
-      </p>
-    )
+    content =
+      search || status ? (
+        <p className="message">
+          <SearchX size={20} aria-hidden="true" />
+          {noMatchesMessage(search, status)}
+        </p>
+      ) : (
+        <p className="message">
+          <Inbox size={20} aria-hidden="true" />
+          No leads yet. Add your first one above.
+        </p>
+      )
   } else {
-    content = <LeadTable leads={leads} onStatusChange={handleStatusChange} />
+    content = (
+      <>
+        <LeadTable leads={leads} onStatusChange={handleStatusChange} />
+        <Pagination
+          page={query.page}
+          limit={query.limit}
+          total={total}
+          onPageChange={setPage}
+          onLimitChange={setLimit}
+        />
+      </>
+    )
   }
 
   let summary = null
@@ -68,7 +98,7 @@ function App() {
       </>
     )
   } else if (!isLoading && !error) {
-    summary = `${leads.length} ${leads.length === 1 ? 'lead' : 'leads'}`
+    summary = `${total} ${total === 1 ? 'lead' : 'leads'}`
   }
 
   return (
@@ -78,11 +108,31 @@ function App() {
         <p>Keep track of your sales leads and where each one stands.</p>
       </header>
 
-      <section className="panel" aria-labelledby="add-lead-heading">
-        <div className="panel-header">
-          <h2 id="add-lead-heading">Add a lead</h2>
+      <section className="panel">
+        <h2 className="accordion-heading">
+          <button
+            type="button"
+            id="add-lead-trigger"
+            className="accordion-trigger"
+            aria-expanded={isFormOpen}
+            aria-controls="add-lead-panel"
+            onClick={() => setIsFormOpen((open) => !open)}
+          >
+            <UserPlus size={18} aria-hidden="true" />
+            Add a lead
+            <ChevronDown className="accordion-chevron" size={18} aria-hidden="true" />
+          </button>
+        </h2>
+        {/* Hidden rather than unmounted, so a half-filled form survives collapsing. */}
+        <div
+          id="add-lead-panel"
+          className="accordion-panel"
+          role="region"
+          aria-labelledby="add-lead-trigger"
+          hidden={!isFormOpen}
+        >
+          <LeadForm onCreated={handleCreated} />
         </div>
-        <LeadForm onCreated={reload} />
       </section>
 
       <section className="panel" aria-labelledby="leads-heading">
@@ -93,17 +143,36 @@ function App() {
               {summary}
             </p>
           </div>
-          <div className="search">
-            <Search className="search-icon" size={16} aria-hidden="true" />
-            <input
-              type="search"
-              className="search-input"
-              placeholder="Search by name, email or phone"
-              aria-label="Search leads"
-              maxLength={100}
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
+          <div className="filters">
+            <div className="search">
+              <Search className="search-icon" size={16} aria-hidden="true" />
+              <input
+                type="search"
+                className="search-input"
+                placeholder="Search by name, email or phone"
+                aria-label="Search leads"
+                maxLength={100}
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+              />
+            </div>
+            <div className="select-control status-filter">
+              <select
+                aria-label="Filter by status"
+                value={status ?? 'all'}
+                onChange={(event) =>
+                  setStatus(event.target.value === 'all' ? undefined : (event.target.value as LeadStatus))
+                }
+              >
+                <option value="all">All statuses</option>
+                {LEAD_STATUSES.map((value) => (
+                  <option key={value} value={value}>
+                    {STATUS_LABELS[value]}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={16} aria-hidden="true" />
+            </div>
           </div>
         </div>
         {content}

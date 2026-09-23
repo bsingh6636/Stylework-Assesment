@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { HttpError } from '../src/errors.js';
-import { parseCreateLeadInput, parseLeadId, parseSearch } from '../src/leads/leads.validation.js';
+import {
+  parseCreateLeadInput,
+  parseLeadId,
+  parseLimit,
+  parsePage,
+  parseSearch,
+  parseStatusFilter,
+} from '../src/leads/leads.validation.js';
 
 const valid = { name: 'Asha Rao', email: 'asha@example.com', phone: '+91 98765 43210' };
 
@@ -87,5 +94,51 @@ describe('parseSearch', () => {
   it('rejects arrays and overly long terms', () => {
     expect(() => parseSearch(['a', 'b'])).toThrow(HttpError);
     expect(() => parseSearch('x'.repeat(101))).toThrow(HttpError);
+  });
+});
+
+describe('parseStatusFilter', () => {
+  it('returns undefined when no status is given', () => {
+    expect(parseStatusFilter(undefined)).toBeUndefined();
+    expect(parseStatusFilter('')).toBeUndefined();
+  });
+
+  it('accepts a known status', () => {
+    expect(parseStatusFilter('converted')).toBe('converted');
+  });
+
+  it.each(['archived', 'New', ['new', 'lost'], 1])('rejects %j', (value) => {
+    expect(() => parseStatusFilter(value)).toThrow(HttpError);
+  });
+});
+
+describe('parsePage', () => {
+  it('defaults to the first page', () => {
+    expect(parsePage(undefined)).toBe(1);
+    expect(parsePage('')).toBe(1);
+  });
+
+  it('parses a positive integer', () => {
+    expect(parsePage('7')).toBe(7);
+  });
+
+  it.each(['0', '-1', '1.5', '1e3', 'abc', '2147483648', ['1', '2']])('rejects %j', (value) => {
+    expect(() => parsePage(value)).toThrow(HttpError);
+  });
+});
+
+describe('parseLimit', () => {
+  it('defaults to 20 per page', () => {
+    expect(parseLimit(undefined)).toBe(20);
+    expect(parseLimit('')).toBe(20);
+  });
+
+  it('accepts 1 to 100', () => {
+    expect(parseLimit('1')).toBe(1);
+    expect(parseLimit('100')).toBe(100);
+  });
+
+  it.each(['0', '101', '-5', '2.5', 'all', ['10', '20']])('rejects %j', (value) => {
+    expect(() => parseLimit(value)).toThrow(HttpError);
   });
 });
