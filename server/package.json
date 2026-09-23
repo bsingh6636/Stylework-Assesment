@@ -14,7 +14,8 @@
     "start": "node --enable-source-maps dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:schema": "tsx scripts/apply-schema.ts"
   },
   "dependencies": {
     "cors": "^2.8.6",

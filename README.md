@@ -24,6 +24,7 @@ A small full-stack app for creating, listing, searching and updating the status 
 cd server
 npm install
 cp .env.example .env   # then edit DATABASE_URL (and CORS_ORIGIN if needed)
+npm run db:schema      # create the leads table (safe to re-run)
 npm run dev            # http://localhost:3000
 ```
 
@@ -50,6 +51,14 @@ npm run dev            # http://localhost:5173
 | `npm run typecheck`  | Type-check `src/` and `tests/` without emitting |
 | `npm test`           | Run the test suite once                         |
 | `npm run test:watch` | Run tests in watch mode                         |
+| `npm run db:schema`  | Apply `db/schema.sql` to `DATABASE_URL`         |
+
+## Database
+
+The schema lives in [`server/db/schema.sql`](server/db/schema.sql): a single `leads` table with
+an identity primary key, non-blank `name`/`email`/`phone`, a `status` limited by a CHECK
+constraint (default `new`), a `created_at` timestamp, and a case-insensitive unique index on
+email. Apply it with `npm run db:schema`, or paste it into the Supabase SQL Editor.
 
 ## Environment variables (`server/.env`)
 

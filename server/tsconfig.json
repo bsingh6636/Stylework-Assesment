@@ -1,5 +1,5 @@
 {
-  // Base config used for editor support and `npm run typecheck` (covers src + tests).
+  // Base config used for editor support and `npm run typecheck` (covers src, tests, scripts).
   // The production build uses tsconfig.build.json, which only compiles src/.
   "compilerOptions": {
     "target": "es2023",
@@ -22,5 +22,5 @@
     "verbatimModuleSyntax": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src", "tests"]
+  "include": ["src", "tests", "scripts"]
 }

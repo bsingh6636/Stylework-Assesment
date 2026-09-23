@@ -10,6 +10,7 @@ async function main() {
   // Fail fast if the database is unreachable: open one connection and release it.
   const client = await pool.connect();
   client.release();
+  console.log('Database connected successfully');
 
   const server = createApp().listen(config.port, () => {
     console.log(`API listening on http://localhost:${config.port}`);
