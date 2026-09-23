@@ -93,10 +93,14 @@ email. Apply it with `npm run db:schema`, or paste it into the Supabase SQL Edit
 
 ## Tests
 
+Both apps use [Vitest](https://vitest.dev). Run each suite from its folder:
+
 ```bash
-cd server
-npm test
+cd server && npm test
+cd client && npm test
 ```
+
+### Backend (`server/`)
 
 | File                               | Covers                                                        | Needs a database |
 | ---------------------------------- | ------------------------------------------------------------- | ---------------- |
@@ -109,6 +113,18 @@ The repository tests run only when `TEST_DATABASE_URL` is set, and are skipped o
 They create a temporary schema, apply `db/schema.sql` to it and drop it afterwards, so
 `TEST_DATABASE_URL` can safely be the same database as `DATABASE_URL`. Tests never use
 `DATABASE_URL` itself.
+
+### Frontend (`client/`)
+
+React Testing Library in a jsdom environment. The API module and toasts are mocked, so no
+server is needed.
+
+| File                                   | Covers                                                           |
+| -------------------------------------- | ---------------------------------------------------------------- |
+| `src/api.test.ts`                      | Request URLs, methods, JSON bodies and error handling            |
+| `src/components/LeadForm.test.tsx`     | Create flow, per-field server errors, duplicate email, toasts    |
+| `src/components/LeadTable.test.tsx`    | Rows and links, status changes, disabled select while saving     |
+| `src/App.test.tsx`                     | Loading, debounced search, empty/error states, status updates    |
 
 ## Environment variables (`server/.env`)
 
