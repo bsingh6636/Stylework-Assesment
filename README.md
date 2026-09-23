@@ -48,7 +48,7 @@ npm run dev            # http://localhost:5173
 | `npm run dev`        | Start the API with auto-reload (tsx watch)      |
 | `npm run build`      | Compile TypeScript to `dist/`                   |
 | `npm start`          | Run the compiled server (`dist/index.js`)       |
-| `npm run typecheck`  | Type-check `src/` and `tests/` without emitting |
+| `npm run typecheck`  | Type-check all TypeScript without emitting      |
 | `npm test`           | Run the test suite once                         |
 | `npm run test:watch` | Run tests in watch mode                         |
 | `npm run db:schema`  | Apply `db/schema.sql` to `DATABASE_URL`         |
@@ -88,10 +88,30 @@ an identity primary key, non-blank `name`/`email`/`phone`, a `status` limited by
 constraint (default `new`), a `created_at` timestamp, and a case-insensitive unique index on
 email. Apply it with `npm run db:schema`, or paste it into the Supabase SQL Editor.
 
+## Tests
+
+```bash
+cd server
+npm test
+```
+
+| File                               | Covers                                                        | Needs a database |
+| ---------------------------------- | ------------------------------------------------------------- | ---------------- |
+| `tests/app.test.ts`                | Health check, JSON 404, malformed JSON                        | no               |
+| `tests/leads.routes.test.ts`       | Endpoint status codes and error mapping (repository mocked)   | no               |
+| `tests/leads.validation.test.ts`   | Email, phone, id and search validation rules                  | no               |
+| `tests/leads.repository.test.ts`   | The real SQL: create, duplicates, search, ordering, updates   | yes              |
+
+The repository tests run only when `TEST_DATABASE_URL` is set, and are skipped otherwise.
+They create a temporary schema, apply `db/schema.sql` to it and drop it afterwards, so
+`TEST_DATABASE_URL` can safely be the same database as `DATABASE_URL`. Tests never use
+`DATABASE_URL` itself.
+
 ## Environment variables (`server/.env`)
 
-| Variable       | Required | Default                 | Description                                  |
-| -------------- | -------- | ----------------------- | -------------------------------------------- |
-| `DATABASE_URL` | yes      |                         | PostgreSQL connection string                 |
-| `PORT`         | no       | `3000`                  | Port the API listens on                      |
-| `CORS_ORIGIN`  | no       | `http://localhost:5173` | Comma-separated list of allowed origins      |
+| Variable            | Required | Default                 | Description                                  |
+| ------------------- | -------- | ----------------------- | -------------------------------------------- |
+| `DATABASE_URL`      | yes      |                         | PostgreSQL connection string                 |
+| `PORT`              | no       | `3000`                  | Port the API listens on                      |
+| `CORS_ORIGIN`       | no       | `http://localhost:5173` | Comma-separated list of allowed origins      |
+| `TEST_DATABASE_URL` | no       |                         | Enables the PostgreSQL tests (see Tests)     |
