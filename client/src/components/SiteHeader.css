@@ -1,4 +1,8 @@
 .site-header {
+  position: sticky;
+  top: 0;
+  /* Positioned content later in the DOM (search icon, select chevrons, progress bar) would otherwise paint over it. */
+  z-index: 10;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
