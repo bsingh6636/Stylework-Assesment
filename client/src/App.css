@@ -1,7 +1,8 @@
 .app {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 40px 16px;
+  padding: 40px max(var(--gutter), env(safe-area-inset-right)) calc(48px + env(safe-area-inset-bottom))
+    max(var(--gutter), env(safe-area-inset-left));
 }
 
 .app-header {
@@ -10,9 +11,12 @@
 
 .app-header h1 {
   font-size: 1.75rem;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
 }
 
 .app-header p {
+  margin-top: 4px;
   color: var(--text-muted);
 }
 
@@ -20,6 +24,7 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  box-shadow: var(--shadow);
   overflow: hidden;
 }
 
@@ -67,10 +72,6 @@
   background: none;
   border: 0;
   cursor: pointer;
-}
-
-.accordion-trigger:hover {
-  background: var(--surface-muted);
 }
 
 .accordion-trigger:focus-visible {
@@ -144,13 +145,56 @@
   flex: 0 1 180px;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px), (max-height: 480px) {
+  .app {
+    padding-top: 20px;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-header {
+    margin-bottom: 16px;
+  }
+
+  .app-header h1 {
+    font-size: 1.375rem;
+  }
+
+  .app-header p {
+    font-size: 0.9375rem;
+  }
+
+  .panel + .panel {
+    margin-top: 16px;
+  }
+
+  .panel-header {
+    gap: 12px;
+    padding: 14px 16px;
+  }
+
+  .panel-title {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .accordion-trigger {
+    padding: 14px 16px;
+  }
+
+  .filters {
+    gap: 8px;
+  }
+
+  /* The search box takes the spare room while both fit on one line; once they wrap, each fills its own. */
   .search {
+    flex: 999 1 220px;
     max-width: none;
   }
 
   .status-filter {
-    flex-basis: 100%;
+    flex: 1 1 140px;
   }
 }
 
@@ -192,6 +236,8 @@
 @media (max-width: 760px) {
   .lead-form {
     grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    padding: 16px;
   }
 }
 
@@ -299,8 +345,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: var(--icon-button-size);
+  height: var(--icon-button-size);
   padding: 0;
   color: var(--text-muted);
   background: none;
@@ -360,6 +406,29 @@
 .dialog-actions button {
   padding: 8px 16px;
   font-size: 0.875rem;
+}
+
+/* A bottom sheet on phones, where the actions sit within reach of a thumb. */
+@media (max-width: 640px) {
+  .dialog {
+    width: 100%;
+    max-width: none;
+    margin: auto 0 0;
+    padding: 24px 20px calc(20px + env(safe-area-inset-bottom));
+    border-width: 1px 0 0;
+    border-radius: 16px 16px 0 0;
+    animation: sheet-up 0.25s ease-out;
+  }
+
+  .dialog-actions button {
+    flex: 1 1 0;
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
 }
 
 .message {
@@ -458,6 +527,19 @@
   }
 }
 
+.skeleton-avatar {
+  flex: none;
+  width: var(--avatar-size);
+  max-width: none;
+  height: var(--avatar-size);
+  border-radius: 50%;
+}
+
+.skeleton-email {
+  height: 0.625rem;
+  margin-top: 8px;
+}
+
 .skeleton-phone {
   width: 7.5rem;
 }
@@ -491,13 +573,10 @@
   height: 0.625rem;
 }
 
-.lead-table-skeleton tbody tr:hover {
-  background: none;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .spin,
   .accordion-panel,
+  .dialog,
   .skeleton {
     animation: none;
   }
@@ -518,8 +597,11 @@
 }
 
 .lead-table {
+  --avatar-size: 36px;
   width: 100%;
   border-collapse: collapse;
+  /* The lead column gets whatever the fixed-width columns leave, so long names shrink instead of overflowing. */
+  table-layout: fixed;
   font-size: 0.9375rem;
 }
 
@@ -527,7 +609,6 @@
 .lead-table td {
   padding: 12px 16px;
   text-align: left;
-  white-space: nowrap;
 }
 
 .lead-table th:first-child,
@@ -545,49 +626,95 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  white-space: nowrap;
   color: var(--text-muted);
   background: var(--surface-muted);
+}
+
+.lead-table th.lead-phone {
+  width: 10.5rem;
+}
+
+.lead-table th.lead-status {
+  width: 10rem;
+}
+
+.lead-table th.lead-created,
+.lead-table th.lead-updated {
+  width: 9rem;
+}
+
+.lead-table th.lead-actions {
+  width: calc(var(--icon-button-size) + 28px);
 }
 
 .lead-table tbody tr + tr td {
   border-top: 1px solid var(--border);
 }
 
-.lead-table tbody tr:hover {
-  background: var(--surface-muted);
+@media (hover: hover) {
+  .accordion-trigger:hover,
+  .lead-table:not(.lead-table-skeleton) tbody tr:hover {
+    background: var(--surface-muted);
+  }
+}
+
+.lead-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.lead-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  line-height: 1.4;
 }
 
 .lead-name {
   font-weight: 600;
 }
 
+.lead-email {
+  font-size: 0.875rem;
+}
+
+.avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--avatar-size);
+  height: var(--avatar-size);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: oklch(0.45 0.13 var(--avatar-hue));
+  background: oklch(0.94 0.04 var(--avatar-hue));
+  border-radius: 50%;
+}
+
+@media (prefers-color-scheme: dark) {
+  .avatar {
+    color: oklch(0.86 0.09 var(--avatar-hue));
+    background: oklch(0.33 0.07 var(--avatar-hue));
+  }
+}
+
 .lead-table .lead-actions {
-  width: 1%;
   padding-block: 0;
   padding-left: 0;
   text-align: right;
 }
 
-/* Keeps one long name or email from pushing the status column off-screen. */
 .truncate {
-  display: block;
-  max-width: 12rem;
+  display: inline-block;
+  max-width: 100%;
   overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
-}
-
-.lead-email .truncate {
-  max-width: 14rem;
-}
-
-@media (max-width: 1100px) {
-  .truncate {
-    max-width: 10rem;
-  }
-
-  .lead-email .truncate {
-    max-width: 12rem;
-  }
+  vertical-align: top;
 }
 
 .timestamp {
@@ -601,7 +728,36 @@
   font-size: 0.8125rem;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 959px) {
+  .lead-table th,
+  .lead-table td {
+    padding-inline: 12px;
+  }
+
+  .lead-table th.lead-phone,
+  .lead-table th.lead-status {
+    width: 9.5rem;
+  }
+
+  .lead-table th.lead-created {
+    width: 8rem;
+  }
+}
+
+/* Tablets in portrait: dropping the least useful column and the avatars leaves room to read names and emails. */
+@media (min-width: 768px) and (max-width: 959px) {
+  .lead-table .lead-updated,
+  .lead-table .avatar,
+  .lead-table .skeleton-avatar {
+    display: none;
+  }
+
+  .lead-table th.lead-created {
+    width: 7.5rem;
+  }
+}
+
+@media (max-width: 767px) {
   .lead-table,
   .lead-table tbody {
     display: block;
@@ -619,12 +775,11 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto;
     grid-template-areas:
-      'name status actions'
-      'email email email'
+      'lead status actions'
       'phone phone phone'
       'created created created'
       'updated updated updated';
-    gap: 2px 12px;
+    column-gap: 12px;
     padding: 14px 16px;
   }
 
@@ -642,69 +797,85 @@
     padding: 0;
   }
 
-  .lead-name {
-    grid-area: name;
+  .lead-table td.lead-cell {
+    grid-area: lead;
+  }
+
+  .lead-table td.lead-status {
+    grid-area: status;
     align-self: center;
   }
 
-  .lead-name .truncate {
-    max-width: none;
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
-
-  .lead-email {
-    grid-area: email;
-  }
-
-  .lead-email .truncate {
-    max-width: 100%;
-  }
-
-  .lead-phone {
-    grid-area: phone;
-  }
-
-  .lead-status {
-    grid-area: status;
-  }
-
-  .lead-table .lead-actions {
+  .lead-table td.lead-actions {
     grid-area: actions;
     align-self: center;
+    margin-right: -8px;
   }
 
-  .lead-created {
+  .lead-table td.lead-phone {
+    grid-area: phone;
+    margin-top: 4px;
+  }
+
+  .lead-table td.lead-created {
     grid-area: created;
     margin-top: 6px;
   }
 
-  .lead-updated {
+  .lead-table td.lead-updated {
     grid-area: updated;
   }
 
-  .lead-created,
-  .lead-updated {
+  /* Lines the details up with the name, past the avatar. */
+  .lead-table td.lead-phone,
+  .lead-table td.lead-created,
+  .lead-table td.lead-updated {
+    padding-left: calc(var(--avatar-size) + 12px);
+  }
+
+  .lead-table td.lead-created,
+  .lead-table td.lead-updated {
     display: flex;
-    gap: 6px;
+    gap: 8px;
     color: var(--text-muted);
     font-size: 0.8125rem;
   }
 
-  .lead-created::before,
-  .lead-updated::before {
+  .lead-table td.lead-created::before,
+  .lead-table td.lead-updated::before {
     content: attr(data-label);
-    min-width: 4.5rem;
+    flex: none;
+    min-width: 3.75rem;
   }
 
   .timestamp {
     flex-direction: row;
-    gap: 4px;
+    flex-wrap: wrap;
+    column-gap: 4px;
     color: var(--text);
   }
 
   .lead-table-skeleton .skeleton-time {
     margin-top: 0;
+  }
+}
+
+/* Too narrow to share the top row with the name, so the status gets a row of its own. */
+@media (max-width: 420px) {
+  .lead-table tbody tr {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'lead actions'
+      'phone phone'
+      'status status'
+      'created created'
+      'updated updated';
+  }
+
+  .lead-table td.lead-status {
+    justify-self: start;
+    margin-top: 8px;
+    padding-left: calc(var(--avatar-size) + 12px);
   }
 }
 
@@ -782,6 +953,41 @@
   text-align: center;
 }
 
+.page-compact {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .pagination {
+    padding: 12px 16px;
+  }
+
+  .pagination nav {
+    flex-basis: 100%;
+  }
+
+  .page-list {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-list {
+    justify-content: space-between;
+  }
+
+  .page-number,
+  .page-gap {
+    display: none;
+  }
+
+  .page-compact {
+    display: block;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
 .status-select {
   position: relative;
   display: inline-flex;
@@ -839,4 +1045,44 @@
 
 .status-lost {
   --status-color: var(--status-lost);
+}
+
+@media (pointer: coarse) {
+  .search-input,
+  .select-control select,
+  .field input,
+  .dialog-actions button {
+    min-height: 44px;
+  }
+
+  .button-secondary,
+  .page-size select {
+    min-height: 40px;
+  }
+
+  .page-button {
+    min-width: 40px;
+    height: 40px;
+  }
+
+  /* Below 16px, iOS Safari zooms the whole page in when one of these is tapped. */
+  .page-size select,
+  .status-select select {
+    font-size: 1rem;
+  }
+
+  .status-select select {
+    min-height: 32px;
+    padding-inline: 12px 32px;
+  }
+
+  .status-select svg {
+    right: 12px;
+  }
+
+  /* Touch screens can't hover to read a title, so long text wraps instead of being cut off. */
+  .truncate {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
 }

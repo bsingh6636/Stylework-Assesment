@@ -14,6 +14,7 @@ describe('LeadTable', () => {
     const first = within(rows[0]!)
     // The title shows the full text when a long name or email is cut off.
     expect(first.getByText('Asha Rao')).toHaveAttribute('title', 'Asha Rao')
+    expect(first.getByText('AR')).toHaveAttribute('aria-hidden', 'true')
     expect(first.getByRole('link', { name: asha.email })).toHaveAttribute('href', 'mailto:asha@example.com')
     expect(first.getByRole('link', { name: asha.email })).toHaveAttribute('title', asha.email)
     expect(first.getByRole('link', { name: asha.phone })).toHaveAttribute('href', 'tel:+919876543210')

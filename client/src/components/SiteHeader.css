@@ -14,7 +14,7 @@
   gap: 16px;
   max-width: 1100px;
   margin: 0 auto;
-  padding: 12px 16px;
+  padding: 12px max(var(--gutter), env(safe-area-inset-right)) 12px max(var(--gutter), env(safe-area-inset-left));
 }
 
 .site-brand {
@@ -72,7 +72,14 @@
 
 /* Icon-only links on phones; the hidden labels still name them for screen readers. */
 @media (max-width: 540px) {
+  .site-header-inner {
+    padding-block: 10px;
+  }
+
   .site-link {
+    justify-content: center;
+    min-width: 36px;
+    min-height: 36px;
     padding: 8px;
   }
 
@@ -83,5 +90,30 @@
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
+  }
+}
+
+@media (max-width: 360px) {
+  .site-brand {
+    font-size: 0.9375rem;
+  }
+}
+
+@media (pointer: coarse) {
+  .site-link {
+    min-height: 40px;
+  }
+}
+
+@media (pointer: coarse) and (max-width: 540px) {
+  .site-link {
+    min-width: 40px;
+  }
+}
+
+/* Phones in landscape are too short to give a sticky header a permanent slice of the screen. */
+@media (max-height: 480px) {
+  .site-header {
+    position: static;
   }
 }

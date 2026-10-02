@@ -17,7 +17,7 @@ const leadNames = () =>
   screen
     .queryAllByRole<HTMLTableRowElement>('row')
     .slice(1) // skip the header row
-    .map((row) => row.cells[0]?.textContent)
+    .map((row) => row.querySelector('.lead-name')?.textContent)
 
 const pageOf = (leads: Lead[], total = leads.length): LeadPage => ({ leads, total, page: 1, limit: 20 })
 

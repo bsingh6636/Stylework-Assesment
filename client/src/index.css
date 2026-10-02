@@ -11,11 +11,15 @@
   --accent-emphasis: #0969da;
   --danger-emphasis: #cf222e;
   --radius: 10px;
+  --shadow: 0 1px 2px rgb(31 35 40 / 0.06), 0 1px 3px rgb(31 35 40 / 0.04);
+  --gutter: 16px;
+  --icon-button-size: 32px;
 
-  --status-new: #0969da;
-  --status-contacted: #9a6700;
-  --status-qualified: #8250df;
-  --status-converted: #1a7f37;
+  /* Status pills put this text on a 14% tint of itself: these shades keep it above 4.5:1. */
+  --status-new: #0550ae;
+  --status-contacted: #7d4e00;
+  --status-qualified: #6639ba;
+  --status-converted: #116329;
   --status-lost: #59636e;
 
   font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
@@ -24,6 +28,8 @@
   background: var(--bg);
   color-scheme: light dark;
   -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -38,12 +44,25 @@
     --danger: #f85149;
     --accent-emphasis: #1f6feb;
     --danger-emphasis: #da3633;
+    --shadow: 0 1px 2px rgb(1 4 9 / 0.4);
 
     --status-new: #4493f8;
     --status-contacted: #d29922;
     --status-qualified: #ab7df8;
     --status-converted: #3fb950;
     --status-lost: #9198a1;
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --gutter: 12px;
+  }
+}
+
+@media (pointer: coarse) {
+  :root {
+    --icon-button-size: 40px;
   }
 }
 

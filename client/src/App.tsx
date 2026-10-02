@@ -164,7 +164,7 @@ function App() {
 
       <section className="panel" aria-labelledby="leads-heading">
         <div className="panel-header">
-          <div>
+          <div className="panel-title">
             <h2 id="leads-heading">Leads</h2>
             <p className="panel-summary" aria-live="polite">
               {summary}

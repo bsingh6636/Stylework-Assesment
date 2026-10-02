@@ -1,5 +1,5 @@
 import { ChevronDown, LoaderCircle, Trash2 } from 'lucide-react'
-import { useState, type ChangeEvent } from 'react'
+import { useState, type ChangeEvent, type CSSProperties } from 'react'
 import { LEAD_STATUSES, STATUS_LABELS, type Lead, type LeadStatus } from '../types.ts'
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' })
@@ -16,13 +16,22 @@ function TableHead() {
   return (
     <thead>
       <tr>
-        <th scope="col">Name</th>
-        <th scope="col">Email</th>
-        <th scope="col">Phone</th>
-        <th scope="col">Status</th>
-        <th scope="col">Created</th>
-        <th scope="col">Updated</th>
-        <th scope="col">
+        <th scope="col" className="lead-cell">
+          Lead
+        </th>
+        <th scope="col" className="lead-phone">
+          Phone
+        </th>
+        <th scope="col" className="lead-status">
+          Status
+        </th>
+        <th scope="col" className="lead-created">
+          Created
+        </th>
+        <th scope="col" className="lead-updated">
+          Updated
+        </th>
+        <th scope="col" className="lead-actions">
           <span className="visually-hidden">Actions</span>
         </th>
       </tr>
@@ -39,18 +48,23 @@ function LeadTable({ leads, isBusy = false, onStatusChange, onDelete }: LeadTabl
         <tbody>
           {leads.map((lead) => (
             <tr key={lead.id}>
-              <td className="lead-name">
-                <span className="truncate" title={lead.name}>
-                  {lead.name}
-                </span>
-              </td>
-              <td className="lead-email">
-                <a className="truncate" href={`mailto:${lead.email}`} title={lead.email}>
-                  {lead.email}
-                </a>
+              <td className="lead-cell">
+                <div className="lead-identity">
+                  <Avatar lead={lead} />
+                  <div className="lead-text">
+                    <span className="lead-name truncate" title={lead.name}>
+                      {lead.name}
+                    </span>
+                    <a className="lead-email truncate" href={`mailto:${lead.email}`} title={lead.email}>
+                      {lead.email}
+                    </a>
+                  </div>
+                </div>
               </td>
               <td className="lead-phone">
-                <a href={`tel:${lead.phone.replace(/[^\d+]/g, '')}`}>{lead.phone}</a>
+                <a className="truncate" href={`tel:${lead.phone.replace(/[^\d+]/g, '')}`} title={lead.phone}>
+                  {lead.phone}
+                </a>
               </td>
               <td className="lead-status">
                 <StatusSelect lead={lead} onChange={onStatusChange} />
@@ -100,11 +114,14 @@ export function LeadTableSkeleton({ rows = SKELETON_WIDTHS.length }: { rows?: nu
             const widths = SKELETON_WIDTHS[index % SKELETON_WIDTHS.length]!
             return (
               <tr key={index}>
-                <td className="lead-name">
-                  <span className="skeleton" style={{ width: widths.name }} />
-                </td>
-                <td className="lead-email">
-                  <span className="skeleton" style={{ width: widths.email }} />
+                <td className="lead-cell">
+                  <div className="lead-identity">
+                    <span className="skeleton skeleton-avatar" />
+                    <div className="lead-text">
+                      <span className="skeleton" style={{ width: widths.name }} />
+                      <span className="skeleton skeleton-email" style={{ width: widths.email }} />
+                    </div>
+                  </div>
                 </td>
                 <td className="lead-phone">
                   <span className="skeleton skeleton-phone" />
@@ -129,6 +146,22 @@ export function LeadTableSkeleton({ rows = SKELETON_WIDTHS.length }: { rows?: nu
         </tbody>
       </table>
     </div>
+  )
+}
+
+function initials(name: string) {
+  const words = name.trim().split(/\s+/)
+  const ends = words.length > 1 ? [words[0], words[words.length - 1]] : words
+  return ends.map((word) => Array.from(word)[0] ?? '').join('').toUpperCase()
+}
+
+// Golden-angle steps give neighbouring ids clearly different hues.
+function Avatar({ lead }: { lead: Lead }) {
+  const style = { '--avatar-hue': Math.round((lead.id * 137.508) % 360) } as CSSProperties
+  return (
+    <span className="avatar" style={style} aria-hidden="true">
+      {initials(lead.name)}
+    </span>
   )
 }
 

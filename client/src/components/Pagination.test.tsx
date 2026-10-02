@@ -14,9 +14,10 @@ function renderPagination(page: number, total: number, limit = 20) {
 
 // Reads the <li>s directly because the aria-hidden gaps have no role.
 const pageLabels = () =>
-  Array.from(screen.getByRole('navigation', { name: 'Pagination' }).querySelectorAll('li'))
-    .map((item) => item.textContent)
-    .slice(1, -1) // skip the previous and next buttons
+  Array.from(
+    screen.getByRole('navigation', { name: 'Pagination' }).querySelectorAll('.page-number, .page-gap'),
+    (item) => item.textContent,
+  )
 
 describe('Pagination', () => {
   it('shows the first, last and neighbouring pages, with gaps elsewhere', () => {
@@ -25,6 +26,7 @@ describe('Pagination', () => {
     expect(screen.getByText('81–100 of 240')).toBeInTheDocument()
     expect(pageLabels()).toEqual(['1', '…', '4', '5', '6', '…', '12'])
     expect(screen.getByRole('button', { name: 'Page 5' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByText('Page 5 of 12')).toBeInTheDocument()
   })
 
   it('shows a page instead of a gap that would hide only that page', () => {

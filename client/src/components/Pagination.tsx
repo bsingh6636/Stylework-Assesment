@@ -69,7 +69,7 @@ function Pagination({ page, limit, total, onPageChange, onLimitChange }: Paginat
                 …
               </li>
             ) : (
-              <li key={item}>
+              <li key={item} className="page-number">
                 <button
                   type="button"
                   className="page-button"
@@ -82,6 +82,10 @@ function Pagination({ page, limit, total, onPageChange, onLimitChange }: Paginat
               </li>
             ),
           )}
+          {/* Replaces the page numbers on narrow screens, where they would wrap. */}
+          <li className="page-compact">
+            Page {page} of {totalPages}
+          </li>
           <li>
             <button
               type="button"
