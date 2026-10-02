@@ -44,6 +44,7 @@ Quoted prompts are as typed, with spelling fixed; the rest are paraphrased.
 | 12 | "Review all changes, push changes in 2 commits." Then: "Also add proper loader states for table, search, add, delete and all", and "better loading and skeleton wherever we can use". | Review of both sessions' changes; skeleton table, progress bar, busy search, read-only form while saving, status and delete spinners |
 | 13 | Review everything, including the live site | Review of the code, docs, git history and the live deployment's headers, rate limiting and open ports |
 | 14 | "Update live URLs, hosted on AWS, Docker, nginx." | Live URLs in the README; `Dockerfile`, `docker-compose.yml` and `deploy/nginx.conf` with a CSP tested against the live app |
+| 15 | "Can you improve the UI, focus mainly on mobile too. Not so responsive on other devices." | Screenshots from 320 px to 1280 px plus phone landscape, before and after; avatar and lead column, tablet table without sideways scrolling, touch-sized controls, bottom-sheet dialog, compact pager. An axe scan of the build then found the light-mode status pills below 4.5:1 contrast; their colours were darkened |
 
 ## What was AI-generated and what was done by hand
 

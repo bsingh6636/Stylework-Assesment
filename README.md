@@ -30,9 +30,13 @@ filter by status, and move it through the pipeline (`new` → `contacted` → `q
 - **Loading states everywhere:** a skeleton table on first load, a progress bar over dimmed
   rows while the next page loads, a spinner in the search box, and busy states for adding,
   status changes and deleting.
-- **Responsive and accessible:** the table turns into cards on phones, long names and emails
-  are truncated (full text on hover), light/dark theme follows the system, and every control
-  is labelled and keyboard reachable.
+- **Responsive from 320 px phones to desktops:** cards on phones, with a bottom-sheet delete
+  dialog and a compact pager; on portrait tablets the table drops a column rather than
+  scrolling sideways. Touch screens get 40–44 px targets and 16 px form text (so iOS Safari
+  doesn't zoom in), and notched phones keep content inside the safe area.
+- **Accessible:** long names and emails are truncated with the full text on hover, or wrap on
+  touch screens; light/dark theme follows the system; every control is labelled and keyboard
+  reachable.
 
 ## Architecture
 
@@ -235,8 +239,9 @@ containing a 9. `%` and `_` in a search are matched literally.
   disabled while the request runs; on failure the dialog stays open with an error toast. After
   a delete the page is refetched, so it refills from the next page (or moves back a page if it
   was the last lead there). A lead someone else already deleted is treated as deleted.
-- On screens narrower than 640 px each lead is shown as a card. Empty, "no matches" and error
-  states (with a retry button) are all handled.
+- Each lead row shows an initials avatar with the name and email. Below 768 px every lead is a
+  card; from 768 to 959 px the table hides the Updated column and the avatars; from 960 px all
+  columns show. Empty, "no matches" and error states (with a retry button) are all handled.
 - The page header links to the author's GitHub profile and portfolio.
 
 ## Security
